@@ -2,6 +2,8 @@
 
 This repository is an implementation of PROBS algorithm:
 
+Blog post (featuring story of chess6x6 agent) - https://medium.com/@omikad/train-ai-to-play-chess-6x6-using-probs-algorithm-539e39a9dea6
+
 Paper: https://arxiv.org/abs/2404.16072 - Playing Board Games with the Predict Results of Beam Search Algorithm
 
 # Introduction
