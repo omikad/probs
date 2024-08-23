@@ -4,7 +4,7 @@ This repository is an implementation of PROBS algorithm:
 
 Paper: https://arxiv.org/abs/2404.16072 - Playing Board Games with the Predict Results of Beam Search Algorithm
 
-## Introduction
+# Introduction
 
 * This is an algorithm for solving board games: two player, deterministic games with full information. It is similar to AlphaZero, but uses much simpler beam search instead of MCTS. Goal of this work is to show that such simplification also work well and can be trained to get winning agent. I don't have enough computational resources to make a fair comparison with AlphaZero, so if you like to contribute - please email me (email is in paper).
 
@@ -46,7 +46,7 @@ Paper: https://arxiv.org/abs/2404.16072 - Playing Board Games with the Predict R
 
 ![PROBS overview. Image created using draw.io](algo.png)
 
-## Installation
+# Installation
 
 We used conda environment on Ubuntu 20.04.4 LTS.
 
@@ -56,15 +56,11 @@ We used conda environment on Ubuntu 20.04.4 LTS.
 
 3). Activate environment: `conda activate probs_env`
 
-## Usage constants
+# Usage
 
-`ENV_NAME` is one of:
+## Usage agent
 
-* connect_four - https://en.wikipedia.org/wiki/Connect_Four
-
-* reversi - https://en.wikipedia.org/wiki/Reversi
-
-`AGENT_NAME` is one of:
+Agent string defines an agent who will be trained or played with:
 
 * random
 
@@ -81,33 +77,148 @@ avoid immediate losing moves, or otherwise select randomly from the remaining mo
 
     * `V=ValueModel1,SL=SelfLearningModel1,CKPT=/home/user/checkpoint.ckpt` - load value model of type `ValueModel1` and Q-value model of type `SelfLearningModel1` from the checkpoint file `/home/user/checkpoint.ckpt`. Also loads optimizers state from the checkpoint
 
-## Usage
+## Train Chess6x6
 
-### Play human vs agent
+1). Create checkpoints directory: `mkdir ~/checkpoints_chess6x6/`
+
+2). Test training loop once:
+
+```
+time python -u go_probs.py \
+--env mychess6x6 \
+--cmd train \
+--device gpu \
+--sub_processes_cnt 2 \
+--self_play_threads 1 \
+--n_high_level_iterations 1 \
+--v_train_episodes 10 \
+--q_train_episodes 10 \
+--q_dataset_episodes_sub_iter 10 \
+--dataset_drop_ratio 0.1 \
+--model V=ValueModel66_v11,SL=SelfLearningModel66_v11 \
+--checkpoints_dir=. \
+--value_lr 0.0003 \
+--self_learning_lr 0.0003 \
+--value_batch_size 16 \
+--self_learning_batch_size 16 \
+--n_max_episode_steps 100 \
+--num_q_s_a_calls 10 \
+--max_depth 100 \
+--get_q_dataset_batch_size 300 \
+--alphazero_move_num_sampling_moves 20 \
+--enemy two_step_lookahead \
+--evaluate_n_games 10
+```
+
+3). Start training:
+
+```
+python -u go_probs.py \
+--env mychess6x6 \
+--cmd train \
+--log tf \
+--device gpu \
+--sub_processes_cnt 10 \
+--self_play_threads 1 \
+--n_high_level_iterations 10000000 \
+--v_train_episodes 6000 \
+--q_train_episodes 3000 \
+--q_dataset_episodes_sub_iter 3000 \
+--dataset_drop_ratio 0.75 \
+--model V=ValueModel66_v11,SL=SelfLearningModel66_v11 \
+--checkpoints_dir=~/checkpoints_chess6x6/ \
+--value_lr 0.0003 \
+--self_learning_lr 0.0003 \
+--value_batch_size 256 \
+--self_learning_batch_size 256 \
+--n_max_episode_steps 200 \
+--num_q_s_a_calls 50 \
+--max_depth 100 \
+--get_q_dataset_batch_size 300 \
+--alphazero_move_num_sampling_moves 20 \
+--enemy two_step_lookahead \
+--evaluate_n_games 100
+```
+
+![Chess 6x6 training vs two-step-lookahead baseline](chess6x6_100_iters.png)
+
+## Train parameters
+
+* `--env mychess6x6` - environment name
+
+* `--cmd train` - command is to train model
+
+* `--log tf` - log to tensorboard
+
+* `--device gpu` - use GPU
+
+* `--sub_processes_cnt 10` - split workload to 10 subprocesses
+
+* `--self_play_threads 1` - split workload to 1 thread
+
+* `--n_high_level_iterations 10000000` - large number of iterations to make training run lasting forever until you stop it
+
+* `--v_train_episodes 6000` - number of self-play games to train V model
+
+* `--q_train_episodes 3000` - number of self-play games to train Q model (main computational complexity lies here)
+
+* `--q_dataset_episodes_sub_iter 3000` - number of self-play games to train Q model in each sub-iteration
+
+* `--dataset_drop_ratio 0.75` - in order to prevent overfitting, drop this number of rows when training
+
+* `--model V=ValueModel66_v11,SL=SelfLearningModel66_v11` - model to train, add `CKPT=filename` to continue training from existing checkpoint
+
+* `--checkpoints_dir=~/checkpoints_chess6x6/` - where to save checkpoints
+
+* `--value_lr 0.0003` - V model learning rate
+
+* `--self_learning_lr 0.0003` - Q model learning rate
+
+* `--value_batch_size 256` - V model batch size
+
+* `--self_learning_batch_size 256` - Q model batch size
+
+* `--n_max_episode_steps 200` - max number of turns in a game
+
+* `--num_q_s_a_calls 50` - number of Q model calls in beam search
+
+* `--max_depth 100` - max sub-game tree depth in beam search
+
+* `--get_q_dataset_batch_size 300` - to optimize beam search, use this number of beam search in parallel
+
+* `--alphazero_move_num_sampling_moves 20` - number of moves to sample actions, remaning moves will be selected greedily
+
+* `--enemy two_step_lookahead` - at the end of each iteration play against this agent to evaluate trained model
+
+* `--evaluate_n_games 100` - play this number of games to evaluate trained model
+
+
+## Play human vs agent
 
 Play game interactively against a specified agent:
 
-`python go_probs.py --cmd play_vs_human --env <ENV_NAME> --enemy <AGENT_NAME>`
+`python go_probs.py --cmd play_vs_human --env <ENV_NAME> --model <AGENT_NAME>`
 
 Examples:
 
 1). Play connect four against random agent:
 
-`python go_probs.py --cmd play_vs_human --env connect_four --enemy random`
+`python go_probs.py --cmd play_vs_human --env connect_four --model random`
 
 2). Play connect four against one step lookahead agent:
 
-`python go_probs.py --cmd play_vs_human --env connect_four --enemy one_step_lookahead`
+`python go_probs.py --cmd play_vs_human --env connect_four --model one_step_lookahead`
 
 3). Play connect four against three step lookahead agent:
 
-`python go_probs.py --cmd play_vs_human --env connect_four --enemy three_step_lookahead`
+`python go_probs.py --cmd play_vs_human --env connect_four --model three_step_lookahead`
 
-4). Play connect four against trained AI agent which uses value model of type `ValueModel1`, Q-value model of type `SelfLearningModel1`, and loaded from checkpoint file `/home/user/checkpoint.ckpt`
+4). Play chess 6x6 against trained AI agent (one-shot agent, it calls Q(s, a) once to find the best move)`
 
-`python go_probs.py --cmd play_vs_human --env connect_four --enemy V=ValueModel1,SL=SelfLearningModel1,CKPT=/home/user/checkpoint.ckpt`
+`python go_probs.py --cmd play_vs_human --env mychess6x6 --model V=ValueModel66_v11,SL=SelfLearningModel66_v11,CKPT=environments/mychess6x6_v11_checkpoint_20240822-132834.ckpt`
 
-### Play agent vs agent
+
+## Play agent vs agent
 
 Make two AI agents play against each other.
 
@@ -153,102 +264,29 @@ Output: ThreeStepLookaheadAgent wins 0.66300, losses 0.33700
 
 Output: SelfLearningModel1 wins 0.89600, losses 0.10400
 
-### Train AI model
+## Battle play trained chess agent
 
-Start training:
+1). Trained agent vs random:
 
-```
-python go_probs.py --cmd train --env <ENV_NAME> \
---model <MODEL_NAME_ENCODED> \
---enemy <AGENT_NAME> \
---log tf \
---checkpoints_dir=<FILEPATH> \
---self_play_threads <NUM_THREADS> \
---n_high_level_iterations <NUM_ITERS> \
---n_games_per_iteration <NUM_GAMES> \
---n_max_episode_steps <MAX_STEPS> \
---num_q_s_a_calls <NUM_EXPAND_CALLS> \
---max_depth <MAX_DEPTH>
-```
+`python go_probs.py --cmd battle --env mychess6x6 --model V=ValueModel66_v11,SL=SelfLearningModel66_v11,CKPT=environments/mychess6x6_v11_checkpoint_20240822-132834.ckpt --enemy random --evaluate_n_games 100`
 
-Parameters:
+Output: SelfLearningModel66_v11 vs RandomAgent: wins 0.99000, losses 0.00000. Battle [50, 49, 0, 0, 1], score = 0.995
 
-* `--env <ENV_NAME>` environment name
+2). Trained agent vs two_step_lookahead:
 
-* `--model <MODEL_NAME>` encoded string of model names and checkpoint
+`python go_probs.py --cmd battle --env mychess6x6 --model V=ValueModel66_v11,SL=SelfLearningModel66_v11,CKPT=environments/mychess6x6_v11_checkpoint_20240822-132834.ckpt --enemy two_step_lookahead --evaluate_n_games 100`
 
-* `--enemy <AGENT_NAME>` name of the agent to evaluate. Evaluation happens at the end of each iteration
+Output: SelfLearningModel66_v11 vs TwoStepLookaheadAgent: wins 0.97000, losses 0.01000. Battle [48, 49, 0, 1, 2], score = 0.98
 
-* `--log tf` optional, add if you want to write training curves to tensorboard
-
-* `--checkpoints_dir <PATH>` optional, filepath to save checkpoints at each iteration
-
-* `--self_play_threads <NUM_THREADS>` number of threads to use for self-playing
-
-* `--n_high_level_iterations <NUM_ITERS>` number of high level iterations
-
-* `--n_games_per_iteration <NUM_GAMES>` games per iteration
-
-* `--n_max_episode_steps <MAX_STEPS>` max steps for each game
-
-* `--num_q_s_a_calls <NUM_EXPAND_CALLS>` number of expand calls during beam search
-
-* `--max_depth <MAX_DEPTH>` max depth of beam search game tree
-
-Examples:
-
-1). Train Connect Four agent from scratch:
+3). Trained agent which makes a move using sub-game tree expansion (specified by agent_type=qvalts in the model string argument) vs one-shot trained agent (which calls Q model once per action)
 
 ```
-time python go_probs.py --cmd train --env connect_four \
---model V=ValueModel2,SL=SelfLearningModel2 \
---enemy two_step_lookahead \
---log tf \
---checkpoints_dir=checkpoints_connect_four \
---self_play_threads 7 \
---n_high_level_iterations 100 \
---n_games_per_iteration 1000 \
---n_max_episode_steps 100 \
---num_q_s_a_calls 100 \
---max_depth 100
+python go_probs.py --cmd battle --env mychess6x6 \
+    --model agent_type=qvalts,V=ValueModel66_v11,SL=SelfLearningModel66_v11,CKPT=environments/mychess6x6_v11_checkpoint_20240822-132834.ckpt \
+    --enemy V=ValueModel66_v11,SL=SelfLearningModel66_v11,CKPT=environments/mychess6x6_v11_checkpoint_20240822-132834.ckpt \
+    --evaluate_n_games 100
 ```
 
-Output: Trained agent total wins 60, losses 40, draws 0. Detailed result: [29, 31, 19, 21, 0]
+Output: agent_type=qvalts,V=ValueModel66_v11,SL=SelfLearningModel66_v11,CKPT=environments/mychess6x6_v11_checkpoint_20240822-132834.ckpt vs SelfLearningModel66_v11: wins 0.64000, losses 0.23000. Battle [27, 37, 8, 15, 13], score = 0.705
 
-![Example 1 wins curve](connectfour_example1.png)
-
-To continue training replace `--model` with `V=ValueModel2,SL=SelfLearningModel2,CKPT=checkpoints_connect_four/checkpoint.ckpt`
-
-2). Train Reversi agent from scratch:
-
-```
-time python go_probs.py --cmd train --env reversi \
---model V=ValueModel1,SL=SelfLearningModel1 \
---enemy two_step_lookahead \
---log tf \
---checkpoints_dir=checkpoints_reversi \
---self_play_threads 7 \
---n_high_level_iterations 50 \
---n_games_per_iteration 200 \
---n_max_episode_steps 100 \
---num_q_s_a_calls 500 \
---max_depth 5
-```
-
-![Example 2 wins curve](reversi_example.png)
-
-3). Continue Reversi training from checkpoint file:
-
-```
-time python go_probs.py --cmd train --env reversi \
---model V=ValueModel1,SL=SelfLearningModel1,CKPT=checkpoints_reversi/checkpoint.ckpt \
---enemy two_step_lookahead \
---log tf \
---checkpoints_dir=checkpoints_reversi \
---self_play_threads 7 \
---n_high_level_iterations 50 \
---n_games_per_iteration 200 \
---n_max_episode_steps 100 \
---num_q_s_a_calls 500 \
---max_depth 5
-```
+Trained agent augmented with tree search wins 64 games and loses 23 games against one-shot trained agent

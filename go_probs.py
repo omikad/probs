@@ -5,7 +5,6 @@ import pprint
 import dataclasses
 import numpy as np
 import traceback
-import time
 
 import environments
 import helpers
@@ -13,128 +12,41 @@ import probs_impl_common
 import probs_impl_main
 
 
-torch.set_num_threads(1)
-print("Torch number of threads:", torch.get_num_threads())
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--cmd', required=True)
-parser.add_argument('--env', required=True)
-parser.add_argument('--model')
-parser.add_argument('--enemy')
-parser.add_argument('--log')
-parser.add_argument('--checkpoints_dir')
-parser.add_argument('--self_play_threads', type=int)
-parser.add_argument('--n_high_level_iterations', type=int)
-parser.add_argument('--n_games_per_iteration', type=int)
-parser.add_argument('--n_max_episode_steps', type=int)
-parser.add_argument('--num_q_s_a_calls', type=int)
-parser.add_argument('--max_depth', type=int)
-parser.add_argument('--evaluate_n_games', type=int)
-parser.add_argument('--randomize_first_turn', action=argparse.BooleanOptionalAction)
-ARGS = parser.parse_args()
-
-if ARGS.log == 'tf':
-    TENSORBOARD = helpers.TensorboardSummaryWriter()
-else:
-    TENSORBOARD = helpers.MemorySummaryWriter()
-helpers.TENSORBOARD = TENSORBOARD
-print("Tensorboard:", TENSORBOARD.__class__.__name__)
-
-MODEL_TRAIN_PARAMS = environments.get_default_train_params(ARGS, ARGS.env)
-
-TRAIN_PARAMS = probs_impl_common.Parameters(
-    create_env_func = environments.get_create_env_func(ARGS.env),
-
-    self_play_threads=(ARGS.self_play_threads if ARGS.self_play_threads is not None else 1),
-
-    value_lr                =MODEL_TRAIN_PARAMS['value_lr'],
-    value_batch_size        =MODEL_TRAIN_PARAMS['value_batch_size'],
-    self_learning_lr        =MODEL_TRAIN_PARAMS['self_learning_lr'],
-    self_learning_batch_size=MODEL_TRAIN_PARAMS['self_learning_batch_size'],
-    dirichlet_alpha         =MODEL_TRAIN_PARAMS['dirichlet_alpha'],
-    exploration_fraction    =MODEL_TRAIN_PARAMS['exploration_fraction'],
-
-    mem_max_episodes=100000,
-    n_high_level_iterations=(ARGS.n_high_level_iterations if ARGS.n_high_level_iterations is not None else 2),
-    n_games_per_iteration=(ARGS.n_games_per_iteration if ARGS.n_games_per_iteration is not None else 100),
-    n_max_episode_steps=(ARGS.n_max_episode_steps if ARGS.n_max_episode_steps is not None else 100),
-    num_q_s_a_calls=(ARGS.num_q_s_a_calls if ARGS.num_q_s_a_calls is not None else 50),
-    max_depth=(ARGS.max_depth if ARGS.max_depth is not None else 1e5),
-
-    evaluate_agent=None,
-    evaluate_n_games=(ARGS.evaluate_n_games if ARGS.evaluate_n_games is not None else 100),
-
-    checkpoints_dir=ARGS.checkpoints_dir,
-)
+ARGS = None
+TENSORBOARD = None
+TRAIN_DEVICE = None
+TRAIN_PARAMS = None
+MODEL_TRAIN_PARAMS = None
 
 
-def parse_model_str(model_str):
-    res = dict()
-    for part in model_str.split(','):
-        key, val = part.split('=')
-        res[key] = val
-    return res
-
-
-def create_model_keeper(model_str) -> helpers.ModelKeeper:
-    parsed_model_str = parse_model_str(model_str)
-
-    model_keeper = helpers.ModelKeeper()
-
-    model_keeper.models['value'] = environments.create_value_model(ARGS, ARGS.env, parsed_model_str['V'])
-    model_keeper.models['self_learner'] = environments.create_self_learning_model(ARGS, ARGS.env, parsed_model_str['SL'])
-
-    model_keeper.optimizers['value'] = torch.optim.AdamW( model_keeper.models['value'].parameters(), lr=TRAIN_PARAMS.value_lr, weight_decay=1e-5)
-    model_keeper.optimizers['self_learner'] = torch.optim.AdamW(model_keeper.models['self_learner'].parameters(), lr=TRAIN_PARAMS.self_learning_lr, weight_decay=1e-5)
-
-    if 'CKPT' in parsed_model_str:
-        checkpoint = parsed_model_str['CKPT']
-        model_keeper.load_from_checkpoint(checkpoint)
-        print(f"Models loaded from `{checkpoint}`:")
-
-    for name, model in model_keeper.models.items():
-        total_parameters = sum(p.numel() for p in model.parameters())
-        print(f"  {name}: {model.__class__.__name__} Params cnt: {total_parameters}")
-        for name, par in model.named_parameters():
-            print("         ", name, par.numel())
-
-    return model_keeper
-
-
-def create_agent(model_str) -> helpers.BaseAgent:
-    if model_str == 'random':
-        return helpers.RandomAgent()
-    elif model_str == 'one_step_lookahead':
-        return helpers.OneStepLookaheadAgent()
-    elif model_str == 'two_step_lookahead':
-        return helpers.TwoStepLookaheadAgent()
-    elif model_str == 'three_step_lookahead':
-        return helpers.ThreeStepLookaheadAgent()
-    else:
-        model_keeper = create_model_keeper(model_str=model_str)
-        model_keeper.eval()
-        return probs_impl_common.SelfLearningAgent(model_keeper.models['self_learner'].__class__.__name__, model_keeper=model_keeper)
+@torch.no_grad()
+def cmd_test():
+    from environments.my_chess_env import go_test_chess_correctness, go_test_chess_encoding_correctness
+    from environments.py_chess_env import go_test_env_works_as_mychess
+    go_test_chess_encoding_correctness()
+    go_test_chess_correctness()
+    go_test_env_works_as_mychess()
 
 
 @torch.no_grad()
 def cmd_battle():
+    agent0 = probs_impl_common.create_agent(ARGS, ARGS.env, TRAIN_PARAMS, ARGS.model, TRAIN_DEVICE)
+    agent1 = probs_impl_common.create_agent(ARGS, ARGS.env, TRAIN_PARAMS, ARGS.enemy, TRAIN_DEVICE)
     env = TRAIN_PARAMS.create_env_func()
-    agent0 = create_agent(ARGS.model)
-    agent1 = create_agent(ARGS.enemy)
+    battle_results = helpers.battle(env, agent0, agent1, n_games=TRAIN_PARAMS.evaluate_n_games, n_max_steps=TRAIN_PARAMS.n_max_episode_steps, randomize_first_turn=True)
 
-    n_games = (ARGS.evaluate_n_games if ARGS.evaluate_n_games is not None else 1000)
-    randomize_first_turn = (ARGS.randomize_first_turn if ARGS.randomize_first_turn is not None else False)
-    n_max_episode_steps = (ARGS.n_max_episode_steps if ARGS.n_max_episode_steps is not None else 200)
+    wins = battle_results[0] + battle_results[1]
+    losses = battle_results[2] + battle_results[3]
+    games = np.sum(battle_results)
+    score = (battle_results[0] + battle_results[1] + 0.5 * battle_results[4]) / sum(battle_results)
 
-    battle_results = helpers.battle(env, agent0, agent1, n_games=n_games, n_max_steps=n_max_episode_steps, randomize_first_turn=randomize_first_turn)
-    helpers.show_battle_results(agent0.get_name(), agent1.get_name(), battle_results, randomize_first_turn=randomize_first_turn)
+    print(f"{agent0.get_name()} vs {agent1.get_name()}: wins {wins / games:.5f}, losses {losses / games:.5f}. Battle {battle_results}, score = {score}")
 
 
 @torch.no_grad()
 def cmd_play_vs_human():
     env = TRAIN_PARAMS.create_env_func()
-    replay_episode = helpers.ExperienceReplayEpisode()
-    agent = create_agent(ARGS.enemy)
+    agent = probs_impl_common.create_agent(ARGS, ARGS.env, TRAIN_PARAMS, ARGS.model, TRAIN_DEVICE)
     step_i = 0
 
     while True:
@@ -142,21 +54,35 @@ def cmd_play_vs_human():
         env.render_ascii()
         pl = "0" if env.is_white_to_move() else "1"
         print(f"* Step {step_i}. Player {pl}. Valid actions: {' '.join(map(str, np.where(env.get_valid_actions_mask() == 1)[0]))}")
-        print(f"Type your action, or type 'a' to make AI move")
+        print(f"Type your action, or type 'r' for random move, or type 'a' to make AI move")
 
         try:
             inp = input().strip().lower()
             if inp == 'a':
                 action = agent.get_action(env)
                 print(f"{agent.get_name()} move {action}")
+            elif inp == 'r':
+                action = env.get_random_action()
+                print(f"Random move {action}")
+            elif inp == 'd':
+                inputs = env.get_rotated_encoded_state()
+                for ii, inp in enumerate(inputs):
+                    helpers.print_encoding(str(ii), inp)
+                continue
+            elif inp == 'aa':
+                inputs = env.get_rotated_encoded_state()
+                vs = agent.value_model.forward(*[torch.unsqueeze(torch.as_tensor(inp), dim=0) for inp in inputs]).detach().cpu().numpy()[0, 0]
+                qa = probs_impl_common.get_q_a_single_state(agent.value_model, agent.self_learning_model, env, 'cpu')
+                print(f"Value(state) = {vs}")
+                print(f"Q(state, *) = {qa}")
+                for action in env.get_valid_actions_iter():
+                    print(f"Q(state, action={action}) = {qa[action]}")
+                continue
+
             else:
                 action = int(inp)
 
-            is_white = env.is_white_to_move()
-            reward_mul = 1 if is_white else -1
-
             reward, done = env.step(action)
-            replay_episode.on_action(action, reward * reward_mul, done)
             print(f"Reward {reward}, done {done}")
 
         except Exception:
@@ -173,31 +99,119 @@ def cmd_train():
     if ARGS.enemy is None:
         TRAIN_PARAMS.evaluate_agent = helpers.RandomAgent()
     else:
-        TRAIN_PARAMS.evaluate_agent = create_agent(ARGS.enemy)
+        TRAIN_PARAMS.evaluate_agent = probs_impl_common.create_agent(ARGS, ARGS.env, TRAIN_PARAMS, ARGS.enemy, TRAIN_DEVICE)
 
-    model_keeper = create_model_keeper(model_str=ARGS.model)
+    model_keeper = probs_impl_common.create_model_keeper(ARGS, ARGS.env, TRAIN_PARAMS, model_str=ARGS.model)
     pprint.pprint(dataclasses.asdict(TRAIN_PARAMS), sort_dicts=False)
 
-    impl = probs_impl_main.ProbsAlgorithmImpl(
-            TRAIN_PARAMS,
-            helpers.ExperienceReplay(max_episodes=TRAIN_PARAMS.mem_max_episodes, create_env_func=TRAIN_PARAMS.create_env_func))
-    impl.go_train(model_keeper)
+    probs_impl_main.go_train(TRAIN_PARAMS, model_keeper, TRAIN_DEVICE)
 
     if isinstance(TENSORBOARD, helpers.MemorySummaryWriter):
         for key, val in TENSORBOARD.points.items():
             m0 = np.min(val) if len(val) > 0 else '-'
             m1 = np.mean(val) if len(val) > 0 else '-'
             m2 = np.max(val) if len(val) > 0 else '-'
-            l = val[-1] if len(val) > 0 else '-'
-            print(f"Memory tensorboard: `{key}` has {len(val)} points (min, mean, max) = {m0, m1, m2}, last = {l}")
+            print(f"Memory tensorboard: `{key}` has {len(val)} points (min, mean, max) = {m0, m1, m2}")
 
     return model_keeper
 
 
 def main():
+    global ARGS
+    global TENSORBOARD
+    global TRAIN_DEVICE
+    global TRAIN_PARAMS
+    global MODEL_TRAIN_PARAMS
+
+    # speed things up: file:///home/excellent/Downloads/szymon_migacz-pytorch-performance-tuning-guide.pdf
+    torch.set_num_threads(1)
+    torch.autograd.set_detect_anomaly(False)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--cmd', required=True)
+    parser.add_argument('--env', required=True)
+    parser.add_argument('--model')
+    parser.add_argument('--enemy')
+    parser.add_argument('--log')
+    parser.add_argument('--checkpoints_dir')
+    parser.add_argument('--sub_processes_cnt', type=int)
+    parser.add_argument('--self_play_threads', type=int)
+    parser.add_argument('--n_high_level_iterations', type=int)
+    parser.add_argument('--n_max_episode_steps', type=int)
+    parser.add_argument('--q_dataset_episodes_sub_iter', type=int)
+    parser.add_argument('--device')
+    parser.add_argument('--num_q_s_a_calls', type=int)
+    parser.add_argument('--max_depth', type=int)
+    parser.add_argument('--evaluate_n_games', type=int, required=False)
+    parser.add_argument('--models', action='append', required=False)
+    parser.add_argument('--alphazero_move_num_sampling_moves', type=float)
+    parser.add_argument('--v_pick_second_best_prob', type=float)
+    parser.add_argument('--greedy_freq', type=float)
+    parser.add_argument('--dir_alpha', type=float)
+    parser.add_argument('--expl_frac', type=float)
+    parser.add_argument('--value_lr', type=float)
+    parser.add_argument('--value_batch_size', type=int)
+    parser.add_argument('--self_learning_lr', type=float)
+    parser.add_argument('--self_learning_batch_size', type=int)
+    parser.add_argument('--get_q_dataset_batch_size', type=int)
+    parser.add_argument('--v_train_episodes', type=int)
+    parser.add_argument('--q_train_episodes', type=int)
+    parser.add_argument('--dataset_drop_ratio', type=float)
+    ARGS = parser.parse_args()
+
+    if ARGS.log == 'tf':
+        TENSORBOARD = helpers.TensorboardSummaryWriter()
+    else:
+        TENSORBOARD = helpers.MemorySummaryWriter()
+    helpers.TENSORBOARD = TENSORBOARD
+    print("Tensorboard:", TENSORBOARD.__class__.__name__)
+
+    if ARGS.device is None or ARGS.device == 'cpu':
+        TRAIN_DEVICE = 'cpu'
+    else:
+        TRAIN_DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    print(f"Train device {TRAIN_DEVICE}")
+
+    TRAIN_PARAMS = probs_impl_common.Parameters(
+        env_name = ARGS.env,
+        create_env_func = environments.get_create_env_func(ARGS, ARGS.env),
+
+        sub_processes_cnt = (ARGS.sub_processes_cnt if ARGS.sub_processes_cnt is not None else 0),
+        self_play_threads = (ARGS.self_play_threads if ARGS.self_play_threads is not None else 1),
+
+        value_lr                 = (ARGS.value_lr if ARGS.value_lr is not None else 0.001),
+        value_batch_size         = (ARGS.value_batch_size if ARGS.value_batch_size is not None else 256),
+        self_learning_lr         = (ARGS.self_learning_lr if ARGS.self_learning_lr is not None else 0.0003),
+        self_learning_batch_size = (ARGS.self_learning_batch_size if ARGS.self_learning_batch_size is not None else 256),
+        get_q_dataset_batch_size = (ARGS.get_q_dataset_batch_size if ARGS.get_q_dataset_batch_size is not None else 256),
+        v_train_episodes         = (ARGS.v_train_episodes if ARGS.v_train_episodes is not None else 100),
+        q_train_episodes         = (ARGS.q_train_episodes if ARGS.q_train_episodes is not None else 100),
+        dataset_drop_ratio       = (ARGS.dataset_drop_ratio if ARGS.dataset_drop_ratio is not None else 0),
+
+        alphazero_move_num_sampling_moves  = ARGS.alphazero_move_num_sampling_moves,
+        v_pick_second_best_prob            = (ARGS.v_pick_second_best_prob if ARGS.v_pick_second_best_prob is not None else 0.0),
+        greedy_action_freq                 = ARGS.greedy_freq,
+        dirichlet_alpha                    = (ARGS.dir_alpha if ARGS.dir_alpha is not None else 0.2),
+        exploration_fraction               = (ARGS.expl_frac if ARGS.expl_frac is not None else 0.1),
+
+        mem_max_episodes            = 100000,
+        n_high_level_iterations     = (ARGS.n_high_level_iterations if ARGS.n_high_level_iterations is not None else 2),
+        n_max_episode_steps         = (ARGS.n_max_episode_steps if ARGS.n_max_episode_steps is not None else 200),
+        num_q_s_a_calls             = (ARGS.num_q_s_a_calls if ARGS.num_q_s_a_calls is not None else 50),
+        max_depth                   = (ARGS.max_depth if ARGS.max_depth is not None else 1e5),
+        q_dataset_episodes_sub_iter = (ARGS.q_dataset_episodes_sub_iter if ARGS.q_dataset_episodes_sub_iter is not None else 500),
+
+        evaluate_agent   = None,
+        evaluate_n_games = (ARGS.evaluate_n_games if ARGS.evaluate_n_games is not None else 200),
+
+        checkpoints_dir = ARGS.checkpoints_dir,
+    )
+
     helpers.show_usage()
 
-    if ARGS.cmd == 'battle':
+    if ARGS.cmd == 'test':
+        cmd_test()
+    elif ARGS.cmd == 'battle':
         cmd_battle()
     elif ARGS.cmd == 'train':
         cmd_train()
