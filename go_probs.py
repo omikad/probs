@@ -5,11 +5,14 @@ import pprint
 import dataclasses
 import numpy as np
 import traceback
+from PyQt5.QtWidgets import QApplication
+import sys
 
 import environments
 import helpers
 import probs_impl_common
 import probs_impl_main
+import play_chess_qt
 
 
 ARGS = None
@@ -41,6 +44,13 @@ def cmd_battle():
     score = (battle_results[0] + battle_results[1] + 0.5 * battle_results[4]) / sum(battle_results)
 
     print(f"{agent0.get_name()} vs {agent1.get_name()}: wins {wins / games:.5f}, losses {losses / games:.5f}. Battle {battle_results}, score = {score}")
+
+
+@torch.no_grad()
+def cmd_play_chess():
+    app = QApplication(sys.argv)
+    window = play_chess_qt.Window()
+    sys.exit(app.exec_())
 
 
 @torch.no_grad()
@@ -215,6 +225,8 @@ def main():
         cmd_battle()
     elif ARGS.cmd == 'train':
         cmd_train()
+    elif ARGS.cmd == 'play_chess':
+        cmd_play_chess()
     elif ARGS.cmd == 'play_vs_human':
         cmd_play_vs_human()
     else:

@@ -237,6 +237,8 @@ class SelfLearningAgent_TreeScan(helpers.BaseAgent):
         self.action_time_budget = 0.1
         self.expand_tree_budget = 500
         self.batch_size = 10
+        self.last_search_time = 0
+        self.last_search_nodes_cnt = 0
 
     def get_action(self, env: helpers.BaseEnv):
         action_time_budget = self.action_time_budget
@@ -249,7 +251,8 @@ class SelfLearningAgent_TreeScan(helpers.BaseAgent):
         tree_qvalues = { 0: None }    # node_i -> action -> q-value
         tree_colors = { 0: env.is_white_to_move() }   # node_i -> {true or false}
 
-        end_time = time.time() + action_time_budget
+        start_time = time.time()
+        end_time = start_time + action_time_budget
         nodes_cnt = 1
         heap = [(float('-inf'), 0, env)]
         while len(heap) > 0 and time.time() < end_time and nodes_cnt < expand_tree_budget:
@@ -310,7 +313,12 @@ class SelfLearningAgent_TreeScan(helpers.BaseAgent):
                 best_action = np.argmax(node_qvals)
                 return best_action, node_qvals[best_action], color
 
-        return __get_best_action(0)[0]
+        action = __get_best_action(0)[0]
+
+        self.last_search_nodes_cnt = nodes_cnt
+        self.last_search_time = time.time() - start_time
+
+        return action
 
 
     def eval(self):

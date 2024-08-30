@@ -2,11 +2,13 @@
 
 This repository is an implementation of PROBS algorithm:
 
-* Play live: https://www.levinson.ai/games/chess6x6
+* Install and play: [Installation](#installation)
 
 * Blog post (featuring story of chess6x6 agent) - https://medium.com/@omikad/train-ai-to-play-chess-6x6-using-probs-algorithm-539e39a9dea6
 
 * Paper: https://arxiv.org/abs/2404.16072 - Playing Board Games with the Predict Results of Beam Search Algorithm
+
+* Live demo: https://www.levinson.ai/games/chess6x6
 
 # Introduction
 
@@ -62,7 +64,39 @@ We used conda environment on Ubuntu 20.04.4 LTS.
 
 # Usage
 
-## Usage agent
+## Play chess6x6 interactively
+
+`python go_probs.py --cmd play_chess --env mychess6x6`
+
+![Screenshot](chess_interactive_1.png)
+
+Options:
+
+* Human player can play white or black
+
+* AI player:
+
+    * Random - AI plays random moves
+
+    * Two step lookahead - analyzes all potential plans of length 2 to either execute a winning move, if available, avoid immediate losing moves, or otherwise select randomly from the remaining moves
+
+    * AI Model 1 - chess6x6 model trained with PROBS algorithm for 5 days
+
+    * AI Model 2 - chess6x6 model trained with PROBS algorithm for 10 days
+
+* AI params:
+
+    * One-shot - trained AI model `Q(s, a)` is called exactly once for each move, action selected greedily as `argmax(Q(s, *))`
+
+    * Beam search 0.5 sec - AI thinking for 0.5 seconds at each turn. Thinking is implemented as beam search (same as Q value training step in PROBS algorithm)
+
+    * Beam search 1 sec - same, but beam search is limited for 1 second
+
+    * Beam search 3 sec - same, but beam search is limited for 3 second
+
+Note: first AI step is usually much longer because of torch initialization. Also, time constraint is only for beam search part and actual time may be slightly bigger.
+
+## Command line agent definition
 
 Agent string defines an agent who will be trained or played with:
 
