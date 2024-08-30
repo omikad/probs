@@ -101,16 +101,16 @@ class Info(QFrame):
                 if self.radio_one_shot.isChecked():
                     self.board.agent = probs_impl_common.SelfLearningAgent("one shot agent", model_keeper=model_keeper, device='cpu')
                 elif self.radio_beam_search_0_5.isChecked():
-                    self.board.agent = probs_impl_common.SelfLearningAgent_TreeScan("tree search 0.1 sec", model_keeper=model_keeper, device='cpu')
-                    self.board.agent.action_time_budget = 0.5 / 2 * 0.9   # divide by two because there are two submoves in each turn. Add a bit of time for eval
+                    self.board.agent = probs_impl_common.SelfLearningAgent_TreeScan("tree search 0.5 sec", model_keeper=model_keeper, device='cpu')
+                    self.board.agent.action_time_budget = 0.2   # divide by two because there are two submoves in each turn. Add a bit of time for eval
                     self.board.agent.expand_tree_budget = 500
                 elif self.radio_beam_search_1.isChecked():
                     self.board.agent = probs_impl_common.SelfLearningAgent_TreeScan("tree search 1 sec", model_keeper=model_keeper, device='cpu')
-                    self.board.agent.action_time_budget = 1 / 2 * 0.9
+                    self.board.agent.action_time_budget = 0.3
                     self.board.agent.expand_tree_budget = 100000
                 elif self.radio_beam_search_3.isChecked():
                     self.board.agent = probs_impl_common.SelfLearningAgent_TreeScan("tree search 3 sec", model_keeper=model_keeper, device='cpu')
-                    self.board.agent.action_time_budget = 3 / 2 * 0.9
+                    self.board.agent.action_time_budget = 0.6
                     self.board.agent.expand_tree_budget = 100000
 
         self.board.reset()

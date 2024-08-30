@@ -289,6 +289,9 @@ class SelfLearningAgent_TreeScan(helpers.BaseAgent):
                         heapq.heappush(heap, (-predicted_action_values[row_i, action], nodes_cnt, copy_env))
                         nodes_cnt += 1
 
+                if time.time() >= end_time:
+                    break
+
         def __get_best_action(node_i):
             node_qvals = tree_qvalues[node_i]
             color = tree_colors[node_i]
