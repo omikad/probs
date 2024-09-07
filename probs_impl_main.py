@@ -6,6 +6,7 @@ from collections import Counter
 import pickle
 
 import environments
+import battle
 import helpers
 import probs_impl_common
 import probs_impl_self_play
@@ -47,6 +48,23 @@ def worker(tasks_queue, results_queue, params, device, v_class_name, q_class_nam
 
         elif task == "stop":
             break
+
+
+@torch.no_grad()
+def report_model_performance(agent, env: helpers.BaseEnv, enemy_agent: helpers.BaseAgent, n_evaluate_games: int, n_max_steps: int, save_to_tf: bool):
+    agent.value_model.eval()
+    agent.self_learning_model.eval()
+
+    results = battle.battle(env, agent, enemy_agent, n_games=n_evaluate_games, n_max_steps=n_max_steps, randomize_n_turns=1)
+
+    wins = results[0] + results[1]
+    losses = results[2] + results[3]
+    draws = results[4]
+
+    print(f"  Trained agent total wins {wins}, losses {losses}, draws {draws}. Detailed result: {results} (with randomized first turn)")
+
+    if save_to_tf:
+        helpers.TENSORBOARD.append_scalar("wins", (wins + 0.5 * draws)/n_evaluate_games)
 
 
 def go_train_self_learning_model(
@@ -103,7 +121,8 @@ def go_train_self_learning_model(
             self_learning_model.eval()
             model_keeper.save_checkpoint(params.checkpoints_dir, "  ")
 
-            agent.report_model_performance(
+            report_model_performance(
+                agent,
                 env=params.create_env_func(),
                 enemy_agent=params.evaluate_agent,
                 n_evaluate_games=params.evaluate_n_games,

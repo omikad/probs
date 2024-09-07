@@ -3,117 +3,89 @@ import torch
 import helpers
 
 
-DEFAULT_TRAIN_PARAMS = {
-    'value_lr': 0.003,
-    'value_batch_size': 128,
-
-    'self_learning_lr': 0.003,
-    'self_learning_batch_size': 128,
-
-    'dirichlet_alpha': 0.5,
-    'exploration_fraction': 0.25,
-}
+N_ACTIONS = 7
 
 
-def create_value_model(ARGS, value_model_class_name):
-    return globals()[value_model_class_name]()
+#[-------------------------------------------------------------------------------]
+#[--------------------------------- Model CF 7x6 v1 -----------------------------]
+#[-------------------------------------------------------------------------------]
 
+WIDTH_v1 = 64
 
-def create_self_learning_model(ARGS, self_learning_model_class_name):
-    return globals()[self_learning_model_class_name]()
-
-
-class ValueModel1(helpers.BaseValueModel):
+class ValueModelCF_v1(helpers.BaseValueModel):   # 409089 parameters
     def __init__(self) -> None:
         super().__init__()
 
-        self.model_state_value = torch.nn.Sequential(   # input (B, 2, 7, 6)
-            torch.nn.Conv2d(in_channels=2, out_channels=16, kernel_size=4, stride=1),
-            torch.nn.ReLU(),
-            torch.nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1),
-            torch.nn.Flatten(),   # -> 64
-            torch.nn.Linear(64, 42),
-            torch.nn.ReLU(),
-            torch.nn.Linear(42, 1),
+        self.model_state_value = torch.nn.Sequential(   # (B, 2, 7, 6) -> (B, COMMON_v1)
+            torch.nn.Conv2d(in_channels=2, out_channels=WIDTH_v1, kernel_size=4, stride=1),
+            torch.nn.LeakyReLU(0.01),
+            ResBlock(planes=WIDTH_v1),
+            ResBlock(planes=WIDTH_v1),
+            ResBlock(planes=WIDTH_v1),
+            ResBlock(planes=WIDTH_v1),
+            ResBlock(planes=WIDTH_v1),
+            torch.nn.Conv2d(in_channels=WIDTH_v1, out_channels=WIDTH_v1, kernel_size=3, stride=1),
+            torch.nn.Flatten(),
+            torch.nn.Linear(WIDTH_v1 * 2, 1),
         )
 
-    def forward(self, board):
-        board = torch.permute(board, (0, 3, 2, 1))
-        state_value = self.model_state_value(board)
+    def forward_common(self, board):
 
-        # state_value.shape == (B, 1)
+        common = self.model_common(board)
+        return common
+
+    def forward(self, board):
+        B = board.shape[0]
+        assert board.shape == (B, 6, 7, 2)
+
+        board = torch.permute(board, (0, 3, 2, 1))
+
+        state_value = self.model_state_value(board)
         return state_value
 
 
-class SelfLearningModel1(helpers.BaseSelfLearningModel):
+class SelfLearningModelCF_v1(helpers.BaseSelfLearningModel):   # 409863 parameters
     def __init__(self) -> None:
         super().__init__()
 
-        self.model_action_values = torch.nn.Sequential(   # input (B, 2, 7, 6)
-            torch.nn.Conv2d(in_channels=2, out_channels=16, kernel_size=4, stride=1),
-            torch.nn.ReLU(),
-            torch.nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1),
-            torch.nn.Flatten(),   # -> 64
-            torch.nn.Linear(64, 42),
-            torch.nn.ReLU(),
-            torch.nn.Linear(42, 7),
+        self.model_action_values = torch.nn.Sequential(   # (B, 2, 7, 6) -> (B, COMMON)
+            torch.nn.Conv2d(in_channels=2, out_channels=WIDTH_v1, kernel_size=4, stride=1),
+            torch.nn.LeakyReLU(0.01),
+            ResBlock(planes=WIDTH_v1),
+            ResBlock(planes=WIDTH_v1),
+            ResBlock(planes=WIDTH_v1),
+            ResBlock(planes=WIDTH_v1),
+            ResBlock(planes=WIDTH_v1),
+            torch.nn.Conv2d(in_channels=WIDTH_v1, out_channels=WIDTH_v1, kernel_size=3, stride=1),
+            torch.nn.Flatten(),
+            torch.nn.Linear(WIDTH_v1 * 2, N_ACTIONS),
         )
 
     def forward(self, board):
-        assert board.shape == (board.shape[0], 6, 7, 2)
+        B = board.shape[0]
+        assert board.shape == (B, 6, 7, 2)
 
         board = torch.permute(board, (0, 3, 2, 1))
         action_values = self.model_action_values(board)
 
-        # action_values.shape == (B, 7)
         return action_values
 
 
-class ValueModel2(helpers.BaseValueModel):
-    def __init__(self) -> None:
-        super().__init__()
+# Got from https://github.com/geochri/AlphaZero_Chess/blob/master/src/alpha_net.py
+class ResBlock(torch.nn.Module):
+    def __init__(self, planes, kernel_size=3, stride=1, padding=1):
+        super(ResBlock, self).__init__()
+        self.conv1 = torch.nn.Conv2d(planes, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=False)
+        self.bn1 = torch.nn.BatchNorm2d(planes)
+        self.conv2 = torch.nn.Conv2d(planes, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=False)
+        self.bn2 = torch.nn.BatchNorm2d(planes)
 
-        self.model_state_value = torch.nn.Sequential(   # input (B, 2, 7, 6)
-            torch.nn.Conv2d(in_channels=2, out_channels=64, kernel_size=3, stride=1),  # -> (B, 64, 5, 4)
-            torch.nn.LeakyReLU(),
-            torch.nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1),  # -> (B, 64, 3, 2)
-            torch.nn.Flatten(),   # -> 64*3*2=384
-            torch.nn.Linear(384, 128),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(128, 64),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(64, 1),
-        )
-
-    def forward(self, board):
-        board = torch.permute(board, (0, 3, 2, 1))   # (B, 2, 7, 6)
-        state_value = self.model_state_value(board)
-
-        # state_value.shape == (B, 1)
-        return state_value
-
-
-class SelfLearningModel2(helpers.BaseSelfLearningModel):
-    def __init__(self) -> None:
-        super().__init__()
-
-        self.model_action_values = torch.nn.Sequential(   # input (B, 2, 7, 6)
-            torch.nn.Conv2d(in_channels=2, out_channels=64, kernel_size=3, stride=1),  # -> (B, 64, 5, 4)
-            torch.nn.LeakyReLU(),
-            torch.nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1),  # -> (B, 64, 3, 2)
-            torch.nn.Flatten(),   # -> 64*3*2=384
-            torch.nn.Linear(384, 128),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(128, 64),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(64, 7),
-        )
-
-    def forward(self, board):
-        assert board.shape == (board.shape[0], 6, 7, 2)
-
-        board = torch.permute(board, (0, 3, 2, 1))   # (B, 2, 7, 6)
-        action_values = self.model_action_values(board)
-
-        # action_values.shape == (B, 7)
-        return action_values
+    def forward(self, x):
+        residual = x
+        out = self.conv1(x)
+        out = torch.nn.functional.relu(self.bn1(out))
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out += residual
+        out = torch.nn.functional.relu(out)
+        return out

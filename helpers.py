@@ -288,76 +288,6 @@ def optimizer_to(optim, device):
                         subparam._grad.data = subparam._grad.data.to(device)
 
 
-def battle(env: BaseEnv, agent0: BaseAgent, agent1: BaseAgent, n_games: int, n_max_steps: int, randomize_first_turn: bool=False, show_game_stats: bool = False):
-    """
-    Play `n_games` where each game is at most `n_max_steps` turns.
-    Return counter of game results as array `[
-        agent0  first turn and agent0 wins,
-        agent0 second turn and agent0 wins,
-        agent1  first turn and agent1 wins,
-        agent1 second turn and agent1 wins,
-        draws
-    ]`
-    """
-
-    start_time = time.time()
-    results = [0, 0, 0, 0, 0]
-    agents = [agent0, agent1]
-
-    for game_i in range(n_games):
-        env.reset()
-
-        agent_id_first_turn = game_i % 2  # Switch sides every other game
-
-        done = False
-
-        for step in range(n_max_steps):
-            env_player_idx = 0 if env.is_white_to_move() else 1
-            agent_idx = (agent_id_first_turn + env_player_idx) % 2
-
-            if randomize_first_turn and step == 0:
-                action = env.get_random_action()
-            else:
-                action = agents[agent_idx].get_action(env)
-
-            reward, done = env.step(action)
-            white_player_reward = reward if env_player_idx == 0 else -reward
-            # white_player_reward = reward if agent_idx == agent_id_first_turn else -reward
-
-            if done:
-                if white_player_reward == 1:
-                    results[2 * agent_id_first_turn] += 1
-                else:
-                    # white loses
-                    # => agent_id_first_turn loses
-                    # => (1 - agent_id_first_turn) plays second turn and wins
-                    results[2 * (1 - agent_id_first_turn) + 1] += 1
-                break
-
-        if not done:   # draw
-            results[4] += 1
-
-        if show_game_stats:
-            print(f"Game {game_i}/{n_games}, {step} steps, results: {results}. Time passed {time.time() - start_time}")
-
-    return results
-
-
-def show_battle_results(name0, name1, battle_results):
-    print(f"{name0} vs {name1}:")
-    print(f"  {name0} white wins: {battle_results[0]}")
-    print(f"  {name0} black wins: {battle_results[1]}")
-    print(f"  {name1} white wins: {battle_results[2]}")
-    print(f"  {name1} black wins: {battle_results[3]}")
-    print(f"               draws: {battle_results[4]}")
-
-    wins = battle_results[0] + battle_results[1]
-    losses = battle_results[2] + battle_results[3]
-    games = np.sum(battle_results)
-
-    print(f"  {name0} wins {wins / games:.5f}, losses {losses / games:.5f}")
-
-
 def print_encoding(name: str, inp: np.ndarray):
     print(f"Input {name} shape {inp.shape}:")
 
@@ -465,6 +395,61 @@ class TwoStepLookaheadAgent(XStepLookaheadAgent):
 class ThreeStepLookaheadAgent(XStepLookaheadAgent):
     def __init__(self) -> None:
         super().__init__(lookahead_steps_cnt=3)
+
+
+class BudgetLookahead(BaseAgent):
+    def __init__(self, time_budget: float):
+        self.time_budget = time_budget
+
+    # NOTE: this assumes env moves go white,black,white,black,...
+    def get_action(self, env: BaseEnv) -> int:
+        time_budget = self.time_budget
+        start_time = time.time()
+
+        kids = [[]]  # node -> [(action, kid_node)]
+        parents = [-1]
+        values = [0]
+
+        queue = [(0, env)]
+        qi = 0
+        while qi < len(queue) and time.time() - start_time < time_budget - 0.2:
+            node_i, node_env = queue[qi]
+
+            for action in node_env.get_valid_actions_iter():
+                kid_env = node_env.copy()
+    
+                reward, done = kid_env.step(action)
+
+                kid_node_i = len(kids)
+
+                kids.append([])
+                parents.append(node_i)
+                values.append(-reward)
+
+                kids[node_i].append((action, kid_node_i))
+
+                curr_node_i = node_i
+                while curr_node_i != -1:
+                    values[curr_node_i] = max((-values[ki] for a, ki in kids[curr_node_i]))
+                    curr_node_i = parents[curr_node_i]
+
+                if not done:
+                    queue.append((kid_node_i, kid_env))
+
+            qi += 1
+
+        ok_moves = []
+        for action, kid_node_i in kids[0]:
+            val = -values[kid_node_i]
+            if val == 1:
+                return action
+            if val == 0:
+                ok_moves.append(action)
+
+        if len(ok_moves) > 0:
+            return np.random.choice(ok_moves)
+
+        return env.get_random_action()
 
 
 def torch_create_dataloader(dataset: list, device: str, batch_size: int, shuffle: bool, drop_last: bool):

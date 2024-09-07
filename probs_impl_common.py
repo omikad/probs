@@ -152,22 +152,6 @@ class SelfLearningAgent(helpers.BaseAgent):
 
         return action
 
-    @torch.no_grad()
-    def report_model_performance(self, env: helpers.BaseEnv, enemy_agent: helpers.BaseAgent, n_evaluate_games: int, n_max_steps: int, save_to_tf: bool):
-        self.value_model.eval()
-        self.self_learning_model.eval()
-
-        results = helpers.battle(env, self, enemy_agent, n_games=n_evaluate_games, n_max_steps=n_max_steps, randomize_first_turn=True)
-
-        wins = results[0] + results[1]
-        losses = results[2] + results[3]
-        draws = results[4]
-
-        print(f"  Trained agent total wins {wins}, losses {losses}, draws {draws}. Detailed result: {results} (with randomized first turn)")
-
-        if save_to_tf:
-            helpers.TENSORBOARD.append_scalar("wins", (wins + 0.5 * draws)/n_evaluate_games)
-
     def get_name(self):
         return self.name
 
@@ -215,6 +199,9 @@ def create_agent(args, env, train_params, model_str, device: str) -> helpers.Bas
         return helpers.TwoStepLookaheadAgent()
     if model_str == 'three_step_lookahead':
         return helpers.ThreeStepLookaheadAgent()
+    elif 'budget_lookahead' in model_str:
+        parsed_model_str = parse_model_str(model_str)
+        return helpers.BudgetLookahead(time_budget=float(parsed_model_str['time_budget']))
     else:
         parsed_model_str = parse_model_str(model_str)
         model_keeper = create_model_keeper(args, env, train_params, model_str=model_str)
