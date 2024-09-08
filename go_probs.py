@@ -37,15 +37,7 @@ def cmd_battle():
     agent0 = probs_impl_common.create_agent(ARGS, ARGS.env, TRAIN_PARAMS, ARGS.model, TRAIN_DEVICE)
     agent1 = probs_impl_common.create_agent(ARGS, ARGS.env, TRAIN_PARAMS, ARGS.enemy, TRAIN_DEVICE)
     env = TRAIN_PARAMS.create_env_func()
-    # battle_results = battle.battle(env, agent0, agent1, n_games=TRAIN_PARAMS.evaluate_n_games, n_max_steps=TRAIN_PARAMS.n_max_episode_steps, randomize_n_turns=2)
-    battle_results = battle.multiprocessing_battle(env, agent0, agent1, n_games=TRAIN_PARAMS.evaluate_n_games, n_max_steps=TRAIN_PARAMS.n_max_episode_steps, randomize_n_turns=2, n_threads=TRAIN_PARAMS.self_play_threads)
-
-    wins = battle_results[0] + battle_results[1]
-    losses = battle_results[2] + battle_results[3]
-    games = np.sum(battle_results)
-    score = (battle_results[0] + battle_results[1] + 0.5 * battle_results[4]) / sum(battle_results)
-
-    print(f"{agent0.get_name()} vs {agent1.get_name()}: wins {wins / games:.5f}, losses {losses / games:.5f}. Battle {battle_results}, score = {score}")
+    battle.multiprocessing_battle(env, agent0, agent1, n_games=TRAIN_PARAMS.evaluate_n_games, n_max_steps=TRAIN_PARAMS.n_max_episode_steps, randomize_n_turns=2, n_threads=TRAIN_PARAMS.self_play_threads)
 
 
 @torch.no_grad()

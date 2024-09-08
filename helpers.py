@@ -402,6 +402,7 @@ class BudgetLookahead(BaseAgent):
         self.time_budget = time_budget
 
     # NOTE: this assumes env moves go white,black,white,black,...
+    # NOTE: this assumes step returns rewards 0 or 1
     def get_action(self, env: BaseEnv) -> int:
         time_budget = self.time_budget
         start_time = time.time()
@@ -415,9 +416,12 @@ class BudgetLookahead(BaseAgent):
         while qi < len(queue) and time.time() - start_time < time_budget - 0.2:
             node_i, node_env = queue[qi]
 
+            queues_added_cnd = 0
+            win_move = -1
+
             for action in node_env.get_valid_actions_iter():
                 kid_env = node_env.copy()
-    
+
                 reward, done = kid_env.step(action)
 
                 kid_node_i = len(kids)
@@ -428,28 +432,39 @@ class BudgetLookahead(BaseAgent):
 
                 kids[node_i].append((action, kid_node_i))
 
+                if reward == 1:
+                    win_move = action
+                    break
+
+                queue.append((kid_node_i, kid_env))
+                queues_added_cnd += 1
+
+            if win_move >= 0:
+                for _ in range(queues_added_cnd):
+                    queue.pop()
+
                 curr_node_i = node_i
                 while curr_node_i != -1:
                     values[curr_node_i] = max((-values[ki] for a, ki in kids[curr_node_i]))
                     curr_node_i = parents[curr_node_i]
 
-                if not done:
-                    queue.append((kid_node_i, kid_env))
-
             qi += 1
 
         ok_moves = []
+        bad_moves = []
         for action, kid_node_i in kids[0]:
             val = -values[kid_node_i]
             if val == 1:
                 return action
             if val == 0:
                 ok_moves.append(action)
+            else:
+                bad_moves.append(action)
 
         if len(ok_moves) > 0:
             return np.random.choice(ok_moves)
 
-        return env.get_random_action()
+        return np.random.choice(bad_moves)
 
 
 def torch_create_dataloader(dataset: list, device: str, batch_size: int, shuffle: bool, drop_last: bool):

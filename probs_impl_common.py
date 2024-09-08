@@ -152,6 +152,10 @@ class SelfLearningAgent(helpers.BaseAgent):
 
         return action
 
+    def eval(self):
+        self.value_model.eval()
+        self.self_learning_model.eval()
+
     def get_name(self):
         return self.name
 
@@ -221,8 +225,8 @@ class SelfLearningAgent_TreeScan(helpers.BaseAgent):
         self.self_learning_model = model_keeper.models['self_learner']
         self.name = name
         self.device = device
-        self.action_time_budget = 0.1
-        self.expand_tree_budget = 500
+        self.action_time_budget = 3.0
+        self.expand_tree_budget = 20000
         self.batch_size = 10
         self.last_search_time = 0
         self.last_search_nodes_cnt = 0

@@ -107,8 +107,8 @@ def _multiprocessing_battle_p0_p1(args):
     p0_agent = AGENTS_DATA[p0]
     p1_agent = AGENTS_DATA[p1]
 
-    if isinstance(p0_agent, probs_impl_common.SelfLearningAgent): p0_agent.eval()
-    if isinstance(p1_agent, probs_impl_common.SelfLearningAgent): p1_agent.eval()
+    if hasattr(p0_agent.__class__, 'eval'): p0_agent.eval()
+    if hasattr(p1_agent.__class__, 'eval'): p1_agent.eval()
 
     stats = Counter()
 
