@@ -127,7 +127,6 @@ def main():
     global TRAIN_PARAMS
     global MODEL_TRAIN_PARAMS
 
-    # speed things up: file:///home/excellent/Downloads/szymon_migacz-pytorch-performance-tuning-guide.pdf
     torch.set_num_threads(1)
     torch.autograd.set_detect_anomaly(False)
 

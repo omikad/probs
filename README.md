@@ -180,6 +180,64 @@ python -u go_probs.py \
 
 ![Chess 6x6 training vs two-step-lookahead baseline](chess6x6_100_iters.png)
 
+## Train Chess8x8
+
+Test training loop once:
+```
+time python -u go_probs.py \
+--env mychess8x8 \
+--cmd train \
+--device gpu \
+--sub_processes_cnt 10 \
+--self_play_threads 1 \
+--n_high_level_iterations 1 \
+--v_train_episodes 60 \
+--q_train_episodes 30 \
+--q_dataset_episodes_sub_iter 30 \
+--dataset_drop_ratio 0.75 \
+--model V=ValueModel88_v1,SL=SelfLearningModel88_v1 \
+--value_lr 0.0003 \
+--self_learning_lr 0.0003 \
+--value_batch_size 256 \
+--self_learning_batch_size 256 \
+--n_max_episode_steps 200 \
+--num_q_s_a_calls 10 \
+--max_depth 100 \
+--get_q_dataset_batch_size 300 \
+--alphazero_move_num_sampling_moves 20 \
+--enemy two_step_lookahead \
+--evaluate_n_games 10 2>&1 | tee training.log
+```
+
+Start training:
+```
+time python -u go_probs.py \
+--env mychess8x8 \
+--cmd train \
+--log tf \
+--device gpu \
+--sub_processes_cnt 10 \
+--self_play_threads 1 \
+--n_high_level_iterations 10000000 \
+--v_train_episodes 6000 \
+--q_train_episodes 3000 \
+--q_dataset_episodes_sub_iter 3000 \
+--dataset_drop_ratio 0.75 \
+--model V=ValueModel88_v1,SL=SelfLearningModel88_v1 \
+--checkpoints_dir=/home/excellent/ds/trained_models/mychess8x8/ \
+--value_lr 0.0003 \
+--self_learning_lr 0.0003 \
+--value_batch_size 256 \
+--self_learning_batch_size 256 \
+--n_max_episode_steps 200 \
+--num_q_s_a_calls 100 \
+--max_depth 100 \
+--get_q_dataset_batch_size 300 \
+--alphazero_move_num_sampling_moves 20 \
+--enemy two_step_lookahead \
+--evaluate_n_games 100
+```
+
 ## Train parameters
 
 * `--env mychess6x6` - environment name

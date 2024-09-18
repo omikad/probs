@@ -188,8 +188,6 @@ def create_model_keeper(args, env, train_params, model_str) -> helpers.ModelKeep
     for name, model in model_keeper.models.items():
         total_parameters = sum(p.numel() for p in model.parameters())
         print(f"  {name}: {model.__class__.__name__} Params cnt: {total_parameters}")
-        for name, par in model.named_parameters():
-            print("         ", name, par.numel())
 
     return model_keeper
 

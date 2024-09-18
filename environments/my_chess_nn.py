@@ -105,6 +105,71 @@ class SelfLearningModel66_v11(helpers.BaseSelfLearningModel):   # 1975762 parame
         return result
 
 
+#[-------------------------------------------------------------------------------]
+#[--------------------------------- Model 88 v1 ---------------------------------]
+#[-------------------------------------------------------------------------------]
+
+WIDTH_8_v1 = 128
+HEIGHT_8_v1 = 20
+
+class ValueModel88_v1(helpers.BaseValueModel):   # 5993153 parameters
+    def __init__(self) -> None:
+        super().__init__()
+
+        self.model_common = torch.nn.Sequential(   # input (B, 16, 10, 10)
+            FirstConvBlock(inplanes=16, outplanes=WIDTH_8_v1, input_rows_cols=10),
+            *[ ResBlock(inplanes=WIDTH_8_v1, planes=WIDTH_8_v1) for _ in range(HEIGHT_8_v1) ]
+        )
+
+        self.model_state_value = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels=WIDTH_8_v1, out_channels=WIDTH_8_v1 // 4, kernel_size=4, stride=2),   # -> (B, 32, 3, 3)
+            torch.nn.LeakyReLU(),
+            torch.nn.Flatten(),
+            torch.nn.Linear(WIDTH_8_v1 // 4 * 3 * 3, 1),
+        )
+
+    def forward_common(self, board, sub_move):
+        assert board.shape == (board.shape[0], 16, 10, 10)
+        assert sub_move.shape == (board.shape[0], 1)
+        common = self.model_common(board)
+        return common
+
+    def forward(self, board, sub_move):
+        common = self.forward_common(board, sub_move)
+        state_value = self.model_state_value(common)
+        return state_value
+
+
+class SelfLearningModel88_v1(helpers.BaseSelfLearningModel):   # 5927554 parameters
+    def __init__(self) -> None:
+        super().__init__()
+
+        self.model_state = torch.nn.Sequential(   # input (B, 16, 10, 10)
+            FirstConvBlock(inplanes=16, outplanes=WIDTH_8_v1, input_rows_cols=10),
+            *[ ResBlock(inplanes=WIDTH_8_v1, planes=WIDTH_8_v1) for _ in range(HEIGHT_8_v1) ]
+        )
+
+        self.model_action_values = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels=WIDTH_8_v1, out_channels=2, kernel_size=1, stride=1),   # -> (B, 2, 8, 8)
+        )
+
+    def forward(self, board, sub_move):
+        assert board.shape == (board.shape[0], 16, 10, 10)
+        assert sub_move.shape == (board.shape[0], 1)
+
+        inp = self.model_state(board)
+
+        action_values = self.model_action_values(inp)
+
+        pick, put = torch.split(action_values, (1, 1), dim=1)
+        pick = torch.flatten(pick, start_dim=1)
+        put = torch.flatten(put, start_dim=1)
+
+        result = pick * (1 - sub_move) + put * sub_move
+
+        return result
+
+
 class FirstConvBlock(torch.nn.Module):
     def __init__(self, inplanes, outplanes, input_rows_cols):
         super(FirstConvBlock, self).__init__()
