@@ -28,10 +28,12 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 add_executable(ProbsChess ${SOURCES})
 
+target_compile_definitions(ProbsChess PRIVATE NO_PEXT)
+
+target_include_directories(ProbsChess PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
 set_property(TARGET ProbsChess PROPERTY CXX_STANDARD 17)
 
 # Find and link yaml-cpp
 find_package(yaml-cpp REQUIRED)
 target_link_libraries(ProbsChess PRIVATE yaml-cpp "${TORCH_LIBRARIES}")
-
-target_include_directories(ProbsChess PRIVATE ${CMAKE_SOURCE_DIR}/include)

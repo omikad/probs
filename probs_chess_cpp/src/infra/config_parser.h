@@ -1,6 +1,3 @@
-#ifndef CONFIGPARSER_H
-#define CONFIGPARSER_H
-
 #include <yaml-cpp/yaml.h>
 #include <string>
 
@@ -19,5 +16,3 @@ private:
     YAML::Node config;
     YAML::Node get_node(const string& key) const;
 };
-
-#endif // CONFIGPARSER_H

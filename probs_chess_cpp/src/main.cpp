@@ -4,7 +4,9 @@
 #include <fstream>
 #include <torch/torch.h>
 
-#include "ConfigParser.h"
+#include "infra/config_parser.h"
+#include "chess/bitboard.h"
+#include "chess/board.h"
 
 using namespace std;
 
@@ -36,8 +38,17 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    torch::Tensor tensor = torch::rand({2, 3});
-    std::cout << tensor << std::endl;
+    // torch::Tensor tensor = torch::rand({2, 3});
+    // cout << tensor << endl;
+
+    lczero::InitializeMagicBitboards();
+
+    // lczero::ChessBoard board;
+    // board.SetFromFen(lczero::ChessBoard::kStartposFen);
+    // cout << board.DebugString() << endl;
+    // for (const auto& move : board.GenerateLegalMoves()) {
+    //     cout << move.as_string() << endl;
+    // }
 
     return 0;
 }
