@@ -1,0 +1,30 @@
+name: 'Example training run'
+env: chess
+log: mem                                # write learning curves to 'tf' or 'mem'
+model:
+  v:
+    type: resnet
+    res_blocks: 10
+    filters: 80
+  q:
+    type: resnet
+    res_blocks: 10
+    filters: 80
+training:
+  n_high_level_iterations: 10
+  v_train_episodes: 1000
+  q_train_episodes: 100
+  dataset_drop_ratio: 0.5
+  q_dataset_episodes_sub_iter: 1
+  n_max_episode_steps: 100
+  tree_num_q_s_a_calls: 100
+  tree_max_depth: 10000
+  tree_q_batch_size: 16
+  exploration_num_sampling_moves: 10
+  learning_rate: 0.0003
+  batch_size: 16
+infra:
+  gpu: -1                               # gpu id, use -1 for cpu
+  n_threads: 8                          # number of threads
+  checkpoints_dir: 'checkpoints'        # where to store checkpoints
+  evaluate_n_games: 100
