@@ -7,20 +7,20 @@
 using namespace std;
 
 
-ConfigParser::ConfigParser(const string& filePath) {
-    ifstream file(filePath);
+ConfigParser::ConfigParser(const string& file_path) {
+    ifstream file(file_path);
     if (!file.good()) {
-        throw runtime_error("Error: Unable to open file at " + filePath);
+        throw runtime_error("Error: Unable to open file at " + file_path);
     }
-    config = YAML::LoadFile(filePath);
+    config = YAML::LoadFile(file_path);
 }
 
-YAML::Node ConfigParser::get_node(const string& key) const {
-    istringstream keyStream(key);
+YAML::Node ConfigParser::GetNode(const string& key) const {
+    istringstream key_stream(key);
     string token;
     vector<YAML::Node> n{config};
 
-    while (getline(keyStream, token, '.')) {
+    while (getline(key_stream, token, '.')) {
         if (!n.back()[token]) {
             throw runtime_error("Invalid configuration key: " + key);
         }
@@ -29,17 +29,17 @@ YAML::Node ConfigParser::get_node(const string& key) const {
     return n.back();
 }
 
-string ConfigParser::get_string(const string& key) const {
-    auto node = get_node(key);
+string ConfigParser::GetString(const string& key) const {
+    auto node = GetNode(key);
     return node.as<string>();
 }
 
-int ConfigParser::get_int(const string& key) const {
-    auto node = get_node(key);
+int ConfigParser::GetInt(const string& key) const {
+    auto node = GetNode(key);
     return node.as<int>();
 }
 
-double ConfigParser::get_double(const string& key) const {
-    auto node = get_node(key);
+double ConfigParser::GetDouble(const string& key) const {
+    auto node = GetNode(key);
     return node.as<double>();
 }

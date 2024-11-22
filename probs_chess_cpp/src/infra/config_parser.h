@@ -8,13 +8,13 @@ using namespace std;
 
 class ConfigParser {
 public:
-    explicit ConfigParser(const string& filePath);
+    explicit ConfigParser(const string& file_path);
 
-    string get_string(const string& key) const;
-    int get_int(const string& key) const;
-    double get_double(const string& key) const;
+    string GetString(const string& key) const;
+    int GetInt(const string& key) const;
+    double GetDouble(const string& key) const;
 
 private:
+    YAML::Node GetNode(const string& key) const;
     YAML::Node config;
-    YAML::Node get_node(const string& key) const;
 };

@@ -13,13 +13,17 @@ namespace probs {
 class IAgent {
     public:
         virtual ~IAgent() {}
-        virtual vector<lczero::Move> getActions(const vector<lczero::ChessBoard>& boards) = 0;
+        virtual vector<lczero::Move> GetActions(const vector<lczero::ChessBoard>& boards) = 0;
+        virtual string GetName() = 0;
 };
 
 
 class RandomAgent : public IAgent {
     public:
-        virtual vector<lczero::Move> getActions(const vector<lczero::ChessBoard>& boards);
+        RandomAgent(const string& name): name(name) {};
+        virtual vector<lczero::Move> GetActions(const vector<lczero::ChessBoard>& boards);
+        virtual string GetName() {return name;};
+        string name;
 };
 
 }  // namespace probs

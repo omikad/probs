@@ -10,7 +10,7 @@ namespace probs {
 
 class Battle {
     public:
-        static void go_battle(const ConfigParser& config_parser);
+        static void GoBattle(const ConfigParser &config_parser);
 };
 
 }  // namespace probs

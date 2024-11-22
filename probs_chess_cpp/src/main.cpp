@@ -38,7 +38,8 @@ int main(int argc, char* argv[]) {
         // cout << board.DebugString() << endl;
 
         if (command == "battle") {
-            probs::Battle::go_battle(config);
+            srand(time(NULL));
+            probs::Battle::GoBattle(config);
         }
     } catch (const exception& e) {
         cerr << "Error: " << e.what() << "\n";

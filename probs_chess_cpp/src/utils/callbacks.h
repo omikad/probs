@@ -4,7 +4,7 @@
 
 namespace probs {
 struct BattleInfo {
-    int gamesPlayed = 0;
+    int games_played = 0;
 
     bool finished = false;
 
