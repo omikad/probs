@@ -1,10 +1,10 @@
-#include "infra/config_parser.h"
 #include <fstream>
 #include <stdexcept>
 #include <iostream>
 
-using namespace std;
+#include "infra/config_parser.h"
 
+using namespace std;
 
 
 ConfigParser::ConfigParser(const string& filePath) {

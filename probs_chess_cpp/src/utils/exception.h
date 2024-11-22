@@ -9,7 +9,6 @@
 
 namespace lczero {
 
-// Exception to throw around.
 class Exception : public std::runtime_error {
  public:
   Exception(const std::string& what) : std::runtime_error(what) {
@@ -18,3 +17,14 @@ class Exception : public std::runtime_error {
 };
 
 }  // namespace lczero
+
+namespace probs {
+
+class Exception : public std::runtime_error {
+ public:
+  Exception(const std::string& what) : std::runtime_error(what) {
+    std::cerr << "Exception: " << what;
+  }
+};
+
+}  // namespace probs

@@ -5,8 +5,7 @@
 #include <torch/torch.h>
 
 #include "infra/config_parser.h"
-#include "chess/bitboard.h"
-#include "chess/board.h"
+#include "infra/battle.h"
 
 using namespace std;
 
@@ -27,28 +26,24 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        ConfigParser parser(configFilePath);
+        ConfigParser config(configFilePath);
 
-        cout << "checkpoints_dir: " << parser.get_string("infra.checkpoints_dir") << "\n";
-        cout << "n_high_level_iterations: " << parser.get_int("training.n_high_level_iterations") << "\n";
-        cout << "dataset_drop_ratio: " << parser.get_double("training.dataset_drop_ratio") << "\n";
+        lczero::InitializeMagicBitboards();
 
+        // torch::Tensor tensor = torch::rand({2, 3});
+        // cout << tensor << endl;
+
+        // lczero::ChessBoard board;
+        // board.SetFromFen(lczero::ChessBoard::kStartposFen);
+        // cout << board.DebugString() << endl;
+
+        if (command == "battle") {
+            probs::Battle::go_battle(config);
+        }
     } catch (const exception& e) {
         cerr << "Error: " << e.what() << "\n";
         return 1;
     }
-
-    // torch::Tensor tensor = torch::rand({2, 3});
-    // cout << tensor << endl;
-
-    lczero::InitializeMagicBitboards();
-
-    // lczero::ChessBoard board;
-    // board.SetFromFen(lczero::ChessBoard::kStartposFen);
-    // cout << board.DebugString() << endl;
-    // for (const auto& move : board.GenerateLegalMoves()) {
-    //     cout << move.as_string() << endl;
-    // }
 
     return 0;
 }
