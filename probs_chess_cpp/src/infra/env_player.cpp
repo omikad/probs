@@ -12,11 +12,8 @@ using namespace std;
 
 namespace probs {
 
-EnvPlayer::EnvPlayer(int n_max_episode_steps) :
-        n_max_episode_steps(n_max_episode_steps)
-    {}
-
-void EnvPlayer::StartNew(const string &starting_fen) {
+EnvPlayer::EnvPlayer(string starting_fen, int n_max_episode_steps) :
+        n_max_episode_steps(n_max_episode_steps) {
     lczero::ChessBoard starting_board;
     int no_capture_ply;
     int full_moves;

@@ -36,8 +36,7 @@ void Battle::GoBattle(const ConfigParser& config_parser) {
     BattleInfo battle_info;
 
     for (int gi = 0; gi < evaluate_n_games; gi++) {
-        EnvPlayer env_player(n_max_episode_steps);
-        env_player.StartNew(starting_fen);
+        EnvPlayer env_player(starting_fen, n_max_episode_steps);
 
         int start_player_shift = env_player.History().IsBlackToMove() ? 1 : 0;
 

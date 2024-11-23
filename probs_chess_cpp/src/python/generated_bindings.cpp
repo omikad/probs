@@ -5,16 +5,16 @@
 
 namespace {
 PyObject *TLczeroExceptionExceptionType;
-struct TGameStateClassType;
-extern PyTypeObject objGameStateClassType;
-struct TGameStateClassType {
+struct TChessEnvClassType;
+extern PyTypeObject objChessEnvClassType;
+struct TChessEnvClassType {
   PyObject_HEAD
-  lczero::python::GameState *value;
+  probs::python::ChessEnv *value;
 };
 
-PyObject* FGameStateMethodmoves(TGameStateClassType* self, PyObject* /* not used */) {
+PyObject* FChessEnvMethodlegal_moves(TChessEnvClassType* self, PyObject* /* not used */) {
   PyObject *retval;
-  std::vector<std::string> retval_cpp = self->value->moves();
+  std::vector<std::string> retval_cpp = self->value->legal_moves();
   retval = PyList_New(retval_cpp.size());
   for (size_t i = 0; i < retval_cpp.size(); ++i) {
     const std::string& s = retval_cpp[i];
@@ -23,7 +23,32 @@ PyObject* FGameStateMethodmoves(TGameStateClassType* self, PyObject* /* not used
   return retval;
 }
 
-PyObject* FGameStateMethodpolicy_indices(TGameStateClassType* self, PyObject* /* not used */) {
+PyObject* FChessEnvMethodmove(TChessEnvClassType* self, PyObject *args, PyObject *kwargs) {
+  const char* move = nullptr;
+  Py_ssize_t move_len = 0;
+  const char* keywords[] = {"move", nullptr};
+  if (!PyArg_ParseTupleAndKeywords(args,
+      kwargs,
+      "|z#",
+      const_cast<char**>(keywords),
+      &move,
+      &move_len)) {
+    return nullptr;
+  }
+  std::optional<std::string> move_cpp;
+  if (move != nullptr) move_cpp.emplace(move, move_len);
+  self->value->move(move_cpp);
+  return Py_BuildValue("");
+}
+
+PyObject* FChessEnvMethodgame_state(TChessEnvClassType* self, PyObject* /* not used */) {
+  PyObject *retval;
+  const std::string& retval_cpp = self->value->game_state();
+  retval = Py_BuildValue("s#", retval_cpp.data(), retval_cpp.size());
+  return retval;
+}
+
+PyObject* FChessEnvMethodpolicy_indices(TChessEnvClassType* self, PyObject* /* not used */) {
   PyObject *retval;
   std::vector<int> retval_cpp = self->value->policy_indices();
   retval = PyTuple_New(retval_cpp.size());
@@ -33,53 +58,40 @@ PyObject* FGameStateMethodpolicy_indices(TGameStateClassType* self, PyObject* /*
   return retval;
 }
 
-PyObject* FGameStateMethodas_string(TGameStateClassType* self, PyObject* /* not used */) {
+PyObject* FChessEnvMethodas_string(TChessEnvClassType* self, PyObject* /* not used */) {
   PyObject *retval;
   const std::string& retval_cpp = self->value->as_string();
   retval = Py_BuildValue("s#", retval_cpp.data(), retval_cpp.size());
   return retval;
 }
 
-PyMethodDef rgGameStateClassFunctions[] = {
-  {"moves", reinterpret_cast<PyCFunction>(&FGameStateMethodmoves), METH_NOARGS, nullptr},
-  {"policy_indices", reinterpret_cast<PyCFunction>(&FGameStateMethodpolicy_indices), METH_NOARGS, nullptr},
-  {"as_string", reinterpret_cast<PyCFunction>(&FGameStateMethodas_string), METH_NOARGS, nullptr},
+PyMethodDef rgChessEnvClassFunctions[] = {
+  {"legal_moves", reinterpret_cast<PyCFunction>(&FChessEnvMethodlegal_moves), METH_NOARGS, nullptr},
+  {"move", reinterpret_cast<PyCFunction>(&FChessEnvMethodmove), METH_VARARGS | METH_KEYWORDS, nullptr},
+  {"game_state", reinterpret_cast<PyCFunction>(&FChessEnvMethodgame_state), METH_NOARGS, nullptr},
+  {"policy_indices", reinterpret_cast<PyCFunction>(&FChessEnvMethodpolicy_indices), METH_NOARGS, nullptr},
+  {"as_string", reinterpret_cast<PyCFunction>(&FChessEnvMethodas_string), METH_NOARGS, nullptr},
   {nullptr, nullptr, 0, nullptr}
 };
 
-int FGameStateConstructor(TGameStateClassType* self, PyObject *args, PyObject *kwargs) {
+int FChessEnvConstructor(TChessEnvClassType* self, PyObject *args, PyObject *kwargs) {
   const char* fen = nullptr;
   Py_ssize_t fen_len = 0;
-  PyObject* moves = nullptr;
-  const char* keywords[] = {"fen", "moves", nullptr};
+  int max_ply = 0;
+  const char* keywords[] = {"fen", "max_ply", nullptr};
   if (!PyArg_ParseTupleAndKeywords(args,
       kwargs,
-      "|z#O!",
+      "|z#i",
       const_cast<char**>(keywords),
       &fen,
       &fen_len,
-      &PyList_Type,
-      &moves)) {
+      &max_ply)) {
     return -1;
   }
   std::optional<std::string> fen_cpp;
   if (fen != nullptr) fen_cpp.emplace(fen, fen_len);
-  std::vector<std::string> moves_cpp;
-  if (moves != nullptr) {
-    moves_cpp.reserve(PyList_Size(moves));
-    for (Py_ssize_t i = 0; i < PyList_Size(moves); ++i) {
-      PyObject* tmp = PyList_GetItem(moves, i);
-      if (!PyUnicode_Check(tmp)) {
-        PyErr_SetString(PyExc_TypeError, "String type expected.");
-        return -1;
-      }
-      Py_ssize_t size;
-      const char* str = PyUnicode_AsUTF8AndSize(tmp, &size);
-      moves_cpp.emplace_back(str, size);
-    }
-  }
   try {
-    self->value = new lczero::python::GameState(fen_cpp, moves_cpp);
+    self->value = new probs::python::ChessEnv(fen_cpp, max_ply);
   } catch (const lczero::Exception &ex) {
     PyErr_SetString(TLczeroExceptionExceptionType, ex.what());
     return -1;
@@ -87,20 +99,20 @@ int FGameStateConstructor(TGameStateClassType* self, PyObject *args, PyObject *k
   return 0;
 }
 
-void FGameStateDestructor(TGameStateClassType* self) {
+void FChessEnvDestructor(TChessEnvClassType* self) {
   delete self->value;
   Py_TYPE(self)->tp_free(&self->ob_base);
 }
 
-PyTypeObject objGameStateClassType = {
+PyTypeObject objChessEnvClassType = {
   .ob_base = PyVarObject_HEAD_INIT(NULL, 0)
-  .tp_name = "libprobs_chess.GameState",
-  .tp_basicsize = sizeof(TGameStateClassType),
-  .tp_dealloc = reinterpret_cast<destructor>(FGameStateDestructor),
+  .tp_name = "libprobs_chess.ChessEnv",
+  .tp_basicsize = sizeof(TChessEnvClassType),
+  .tp_dealloc = reinterpret_cast<destructor>(FChessEnvDestructor),
   .tp_flags = Py_TPFLAGS_DEFAULT,
   .tp_doc = nullptr,
-  .tp_methods = rgGameStateClassFunctions,
-  .tp_init = reinterpret_cast<initproc>(FGameStateConstructor),
+  .tp_methods = rgChessEnvClassFunctions,
+  .tp_init = reinterpret_cast<initproc>(FChessEnvConstructor),
   .tp_alloc = PyType_GenericAlloc,
   .tp_new = PyType_GenericNew,
 };
@@ -127,7 +139,7 @@ PyMODINIT_FUNC PyInit_libprobs_chess() {
   if (TLczeroExceptionExceptionType == nullptr) return nullptr;
   Py_INCREF(TLczeroExceptionExceptionType);
   PyModule_AddObject(module, "LczeroException", TLczeroExceptionExceptionType);
-  if (PyType_Ready(&objGameStateClassType) != 0) return nullptr;
-  PyModule_AddObject(module, "GameState", &objGameStateClassType.ob_base.ob_base);
+  if (PyType_Ready(&objChessEnvClassType) != 0) return nullptr;
+  PyModule_AddObject(module, "ChessEnv", &objChessEnvClassType.ob_base.ob_base);
   return module;
 }

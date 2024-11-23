@@ -68,6 +68,9 @@
         "__nullptr": "cpp",
         "cassert": "cpp",
         "cinttypes": "cpp",
-        "filesystem": "cpp"
+        "filesystem": "cpp",
+        "__bit_reference": "cpp",
+        "__string": "cpp",
+        "ios": "cpp"
     }
 }

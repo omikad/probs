@@ -28,7 +28,7 @@
 import sys
 from pybind.writer import Writer
 from pybind import Module, Class
-from pybind.parameters import (StringParameter, ListOfStringsParameter)
+from pybind.parameters import (StringParameter, ListOfStringsParameter, NumericParameter)
 from pybind.retval import (StringRetVal, ListOfStringsRetVal, IntegralTupleRetVal)
 from pybind.exceptions import CppException
 
@@ -39,14 +39,16 @@ mod.AddInitialization('lczero::InitializeMagicBitboards();')
 ex = mod.AddException(
     CppException('LczeroException', cpp_name='lczero::Exception'))
 
-# PositionHistory class
+# ChessEnv class
 game_state = mod.AddClass(
-    Class('GameState', cpp_name='lczero::python::GameState'))
+    Class('ChessEnv', cpp_name='probs::python::ChessEnv'))
 game_state.constructor.AddParameter(
     StringParameter('fen', optional=True, can_be_none=True),
-    ListOfStringsParameter('moves', optional=True),
+    NumericParameter('max_ply', optional=True)
 ).AddEx(ex)
-game_state.AddMethod('moves').AddRetVal(ListOfStringsRetVal())
+game_state.AddMethod('legal_moves').AddRetVal(ListOfStringsRetVal())
+game_state.AddMethod('move').AddParameter(StringParameter('move', optional=True, can_be_none=True))
+game_state.AddMethod('game_state').AddRetVal(StringRetVal())
 game_state.AddMethod('policy_indices').AddRetVal(IntegralTupleRetVal('i'))
 game_state.AddMethod('as_string').AddRetVal(StringRetVal())
 

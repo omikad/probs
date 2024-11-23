@@ -1,7 +1,3 @@
-/*
-    Adapted from Leela Chess Zero: https://github.com/LeelaChessZero/lc0/
-*/
-
 #pragma once
 
 #include <string>
@@ -11,61 +7,66 @@
 #include "chess/board.h"
 #include "chess/position.h"
 #include "utils/exception.h"
+#include "infra/env_player.h"
+
+using namespace std;
 
 
-namespace lczero {
+namespace probs {
 namespace python {
 
-class GameState {
- public:
-  GameState(const std::optional<std::string> startpos,
-            const std::vector<std::string>& moves) {
-    ChessBoard starting_board;
-    int no_capture_ply;
-    int full_moves;
-    starting_board.SetFromFen(startpos.value_or(ChessBoard::kStartposFen),
-                              &no_capture_ply, &full_moves);
+class ChessEnv {
+    public:
+        ChessEnv(const optional<string> start_fen, optional<int> max_episode_steps) :
+                env_player(EnvPlayer(
+                    start_fen.value_or(lczero::ChessBoard::kStartposFen),
+                    max_episode_steps.has_value() && max_episode_steps.value() > 0 ? max_episode_steps.value() : 450)) {
+        }
 
-    history_.Reset(starting_board, no_capture_ply,
-                   full_moves * 2 - (starting_board.flipped() ? 1 : 2));
+        void move(const optional<string> move_str) {
+            if (!move_str.has_value())
+                return;
+            lczero::Move move(move_str.value(), env_player.History().IsBlackToMove());
+            env_player.Move(move);
+        }
 
-    for (const auto& m : moves) {
-      Move move(m, history_.IsBlackToMove());
-      move = history_.Last().GetBoard().GetModernMove(move);
-      history_.Append(move);
-    }
-  }
+        string game_state() {
+            if (env_player.GameResult() == lczero::GameResult::WHITE_WON) return "white_won";
+            if (env_player.GameResult() == lczero::GameResult::BLACK_WON) return "black_won";
+            if (env_player.GameResult() == lczero::GameResult::DRAW) return "draw";
+            return "undecided";
+        }
 
-  std::vector<std::string> moves() const {
-    auto ms = history_.Last().GetBoard().GenerateLegalMoves();
-    bool is_black = history_.IsBlackToMove();
-    std::vector<std::string> result;
-    for (auto m : ms) {
-      if (is_black) m.Mirror();
-      result.push_back(m.as_string());
-    }
-    return result;
-  }
+        vector<string> legal_moves() const {
+            auto ms = env_player.LastChessBoard().GenerateLegalMoves();
+            bool is_black = env_player.History().IsBlackToMove();
+            vector<string> result;
+                for (auto m : ms) {
+                    m = env_player.LastChessBoard().GetLegacyMove(m);
+                    if (is_black) m.Mirror();
+                    result.push_back(m.as_string());
+                }
+            return result;
+        }
 
-  std::vector<int> policy_indices() const {
-    auto ms = history_.Last().GetBoard().GenerateLegalMoves();
-    std::vector<int> result;
-    for (auto m : ms) {
-      result.push_back(m.as_nn_index(/* transform= */ 0));
-    }
-    return result;
-  }
+        vector<int> policy_indices() const {
+            auto ms = env_player.LastChessBoard().GenerateLegalMoves();
+            vector<int> result;
+            for (auto m : ms) {
+            result.push_back(m.as_nn_index(/* transform= */ 0));
+            }
+            return result;
+        }
 
-  std::string as_string() const {
-    bool is_black = history_.IsBlackToMove();
-    return (is_black ? history_.Last().GetThemBoard()
-                     : history_.Last().GetBoard())
-        .DebugString();
-  }
+        string as_string() const {
+            bool is_black = env_player.History().IsBlackToMove();
+            return (is_black ? env_player.History().Last().GetThemBoard() : env_player.History().Last().GetBoard())
+                .DebugString();
+        }
 
- private:
-  PositionHistory history_;
+    private:
+        EnvPlayer env_player;
 };
 
 }  // namespace python
-}  // namespace lczero
+}  // namespace probs

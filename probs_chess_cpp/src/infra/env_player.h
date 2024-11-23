@@ -12,13 +12,12 @@ namespace probs {
 
 class EnvPlayer {
     public:
-        EnvPlayer(int n_max_episode_steps);
-        void StartNew(const string& starting_fen);
+        EnvPlayer(string starting_fen, int n_max_episode_steps);
         void Move(const lczero::Move& move);
-        const lczero::PositionHistory& History() {return history;}
-        const lczero::GameResult GameResult() {return game_result;}
-        const lczero::ChessBoard LastChessBoard() {return history.Last().GetBoard();}
-        int Ply() {return history.Last().GetGamePly();}
+        const lczero::PositionHistory& History() const {return history;}
+        lczero::GameResult GameResult() const {return game_result;}
+        const lczero::ChessBoard& LastChessBoard() const {return history.Last().GetBoard();}
+        int Ply() const {return history.Last().GetGamePly();}
 
     private:
         void ComputeGameResult();
