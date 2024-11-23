@@ -66,6 +66,8 @@
         "valarray": "cpp",
         "variant": "cpp",
         "__nullptr": "cpp",
-        "cassert": "cpp"
+        "cassert": "cpp",
+        "cinttypes": "cpp",
+        "filesystem": "cpp"
     }
 }

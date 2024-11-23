@@ -7,6 +7,7 @@
 #include "utils/callbacks.h"
 #include "chess/board.h"
 #include "chess/position.h"
+#include "infra/env_player.h"
 
 using namespace std;
 
@@ -35,48 +36,40 @@ void Battle::GoBattle(const ConfigParser& config_parser) {
     BattleInfo battle_info;
 
     for (int gi = 0; gi < evaluate_n_games; gi++) {
-        lczero::ChessBoard starting_board;
-        int no_capture_ply;
-        int full_moves;
-        starting_board.SetFromFen(starting_fen, &no_capture_ply, &full_moves);
+        EnvPlayer env_player(n_max_episode_steps);
+        env_player.StartNew(starting_fen);
 
-        lczero::PositionHistory position_history;
-        position_history.Reset(starting_board, no_capture_ply, full_moves * 2 - (starting_board.flipped() ? 1 : 2));
+        int start_player_shift = env_player.History().IsBlackToMove() ? 1 : 0;
 
-        int start_player_shift = position_history.IsBlackToMove() ? 1 : 0;
+        while (env_player.GameResult() == lczero::GameResult::UNDECIDED) {
+            int ply = env_player.Ply();
+            auto curr_board = env_player.LastChessBoard();
 
-        for (int si = 0; si <= n_max_episode_steps; si++) {
-            auto game_result = position_history.ComputeGameResult();
-            if (game_result != lczero::GameResult::UNDECIDED || si == n_max_episode_steps - 1) {
-                if ((gi + start_player_shift) % 2 == 0) {   // player1 is white:
-                    if (game_result == lczero::GameResult::WHITE_WON)
-                        battle_info.results[0][0]++;
-                    else if (game_result == lczero::GameResult::BLACK_WON)
-                        battle_info.results[2][0]++;
-                    else
-                        battle_info.results[1][0]++;
-                }
-                else {   // player 1 is black
-                    if (game_result == lczero::GameResult::WHITE_WON)
-                        battle_info.results[2][1]++;
-                    else if (game_result == lczero::GameResult::BLACK_WON)
-                        battle_info.results[0][1]++;
-                    else
-                        battle_info.results[1][1]++;
-                }
-                battle_info.finished = gi == evaluate_n_games - 1;
-                battle_info.games_played++;
-                break;
-            }
+            // cout << "Board at step " << ply << ":\n" << curr_board.DebugString() << endl;
 
-            auto curr_board = position_history.Last().GetBoard();
-            // cout << "Board at step " << si << ":\n" << curr_board.DebugString() << endl;
-
-            auto move = ((si + gi) % 2 == 0 ? player1 : player2)->GetActions({curr_board})[0];
-            move = curr_board.GetModernMove(move);
-
-            position_history.Append(move);
+            auto move = ((ply + gi) % 2 == 0 ? player1 : player2)->GetActions({curr_board})[0];
+            
+            env_player.Move(move);
         }
+
+        auto game_result = env_player.GameResult();
+        if ((gi + start_player_shift) % 2 == 0) {   // player1 is white:
+            if (game_result == lczero::GameResult::WHITE_WON)
+                battle_info.results[0][0]++;
+            else if (game_result == lczero::GameResult::BLACK_WON)
+                battle_info.results[2][0]++;
+            else
+                battle_info.results[1][0]++;
+        }
+        else {   // player 1 is black
+            if (game_result == lczero::GameResult::WHITE_WON)
+                battle_info.results[2][1]++;
+            else if (game_result == lczero::GameResult::BLACK_WON)
+                battle_info.results[0][1]++;
+            else
+                battle_info.results[1][1]++;
+        }
+        battle_info.games_played++;
     }
 
     cout << "Games played: " << battle_info.games_played << endl;
