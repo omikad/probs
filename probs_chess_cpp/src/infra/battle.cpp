@@ -42,11 +42,11 @@ void Battle::GoBattle(const ConfigParser& config_parser) {
 
         while (env_player.GameResult() == lczero::GameResult::UNDECIDED) {
             int ply = env_player.Ply();
-            auto curr_board = env_player.LastChessBoard();
+            auto history = env_player.History();
 
             // cout << "Board at step " << ply << ":\n" << curr_board.DebugString() << endl;
 
-            auto move = ((ply + gi) % 2 == 0 ? player1 : player2)->GetActions({curr_board})[0];
+            auto move = ((ply + gi) % 2 == 0 ? player1 : player2)->GetActions({history})[0];
             
             env_player.Move(move);
         }
