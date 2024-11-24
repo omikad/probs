@@ -1,16 +1,15 @@
 name: 'Battle model vs random'
 player1:
-  kind: "random"
-  # kind: "nn_player"
-  # model:
-  #   v:
-  #     type: resnet
-  #     res_blocks: 10
-  #     filters: 80
-  #   q:
-  #     type: resnet
-  #     res_blocks: 10
-  #     filters: 80
+  kind: "vq_resnet_player"
+  model:
+    v:
+      type: resnet
+      res_blocks: 10
+      filters: 80
+    q:
+      type: resnet
+      res_blocks: 10
+      filters: 80
 player2:
   kind: "random"
 env:

@@ -2,7 +2,7 @@
 
 #include "infra/battle.h"
 #include "infra/config_parser.h"
-#include "infra/agent.h"
+#include "infra/player.h"
 #include "utils/exception.h"
 #include "utils/callbacks.h"
 #include "chess/board.h"
@@ -16,18 +16,18 @@ namespace probs {
 
 
 void Battle::GoBattle(const ConfigParser& config_parser) {
-    IAgent* player1;
-    IAgent* player2;
+    IPlayer* player1;
+    IPlayer* player2;
 
-    if (config_parser.GetString("player1.kind") == "random")
-        player1 = new RandomAgent("Player1_random");
-    else
-        throw Exception("Unknown player1.kind attribute value");
-
-    if (config_parser.GetString("player2.kind") == "random")
-        player2 = new RandomAgent("Player2_random");
-    else
-        throw Exception("Unknown player2.kind attribute value");
+    for (int pi = 1; pi <= 2; pi++) {
+        string kind = config_parser.GetString("player" + to_string(pi) + ".kind");
+        if (kind == "random")
+            (pi == 1 ? player1 : player2) = new RandomPlayer("RandomPlayer" + to_string(pi));
+        else if (kind == "vq_resnet_player")
+            (pi == 1 ? player1 : player2) = new VQResnetPlayer(config_parser, "player" + to_string(pi), "VQResnetPlayer" + to_string(pi));
+        else
+            throw Exception("Unknown player1.kind attribute value");
+    }
 
     int evaluate_n_games = config_parser.GetInt("infra.evaluate_n_games");
     int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps");
@@ -71,6 +71,7 @@ void Battle::GoBattle(const ConfigParser& config_parser) {
         battle_info.games_played++;
     }
 
+    cout << "Battle " << player1->GetName() << " vs " << player2->GetName() << ":" << endl;
     cout << "Games played: " << battle_info.games_played << endl;
     cout << "Player [" << player1->GetName() << "]: as white,black:" << endl;
     cout << "   wins: " << battle_info.results[0][0] << ", " << battle_info.results[0][1] << endl;
