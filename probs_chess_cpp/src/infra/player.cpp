@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <ATen/Device.h>
 #include <torch/torch.h>
 
 #include "chess/bitboard.h"
@@ -36,8 +37,24 @@ vector<lczero::Move> RandomPlayer::GetActions(const vector<lczero::PositionHisto
 
 VQResnetPlayer::VQResnetPlayer(const ConfigParser& config_parser, const string& config_key_prefix, const string& name):
         name(name),
+        device(torch::kCPU),
         v_model(config_parser, config_key_prefix + ".model.v"),
-        q_model(config_parser, config_key_prefix + ".model.q") {}
+        q_model(config_parser, config_key_prefix + ".model.q") {
+
+    int gpu_num = config_parser.GetInt("infra.gpu");
+    cout << "VQResnetPlayer GPU: " << gpu_num << endl;
+    if (gpu_num >= 0) {
+        if (torch::cuda::is_available())
+            device = at::Device("cuda:" + to_string(gpu_num));
+        else
+            throw Exception("Config points to GPU which is not available (config parameter infra.gpu)");
+        v_model.to(device);
+        q_model.to(device);
+    }
+
+    cout << DebugString(v_model) << endl;
+    cout << DebugString(q_model) << endl;
+}
 
 
 vector<lczero::Move> VQResnetPlayer::GetActions(const vector<lczero::PositionHistory>& history) {
@@ -66,6 +83,7 @@ vector<lczero::Move> VQResnetPlayer::GetActions(const vector<lczero::PositionHis
         }
     }
 
+    input_tensor = input_tensor.to(device);
     torch::Tensor q_values = q_model.forward(input_tensor);
 
     for (int hi = 0; hi < batch_size; hi++) {

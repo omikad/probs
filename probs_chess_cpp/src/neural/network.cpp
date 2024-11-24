@@ -1,8 +1,14 @@
+/*
+    Based on: https://github.com/leimao/LibTorch-ResNet-CIFAR/blob/main/src/resnet.cpp
+*/
+
 #include <torch/torch.h>
+#include <ATen/Device.h>
 #include <iostream>
 
 #include "neural/network.h"
 #include "infra/config_parser.h"
+#include "utils/exception.h"
 
 using namespace std;
 
@@ -49,16 +55,12 @@ torch::nn::Conv2dOptions create_conv1x1_options(int64_t in_planes,
 
 
 struct ResNetBlock : torch::nn::Module {
-    ResNetBlock(int64_t inplanes, int64_t planes, int64_t stride = 1,
-               torch::nn::Sequential downsample = torch::nn::Sequential()) {
-        m_conv1 = register_module("conv1", torch::nn::Conv2d{create_conv3x3_options(inplanes, planes, stride)});
+    ResNetBlock(int64_t planes, int64_t stride = 1) {
+        m_conv1 = register_module("conv1", torch::nn::Conv2d{create_conv3x3_options(planes, planes, stride)});
         m_bn1 = register_module("bn1", torch::nn::BatchNorm2d{planes});
         m_relu = register_module("relu", torch::nn::ReLU{true});
         m_conv2 = register_module("conv2", torch::nn::Conv2d{create_conv3x3_options(planes, planes)});
         m_bn2 = register_module("bn2", torch::nn::BatchNorm2d{planes});
-        if (!downsample->is_empty()) {
-            m_downsample = register_module("downsample", downsample);
-        }
         m_stride = stride;
     }
 
@@ -67,7 +69,6 @@ struct ResNetBlock : torch::nn::Module {
     torch::nn::Conv2d m_conv1{nullptr}, m_conv2{nullptr};
     torch::nn::BatchNorm2d m_bn1{nullptr}, m_bn2{nullptr};
     torch::nn::ReLU m_relu{nullptr};
-    torch::nn::Sequential m_downsample = torch::nn::Sequential();
 
     int64_t m_stride;
 
@@ -81,11 +82,6 @@ struct ResNetBlock : torch::nn::Module {
         out = m_conv2->forward(out);
         out = m_bn2->forward(out);
 
-        if (!m_downsample->is_empty())
-        {
-            identity = m_downsample->forward(x);
-        }
-
         out += identity;
         out = m_relu->forward(out);
 
@@ -93,10 +89,6 @@ struct ResNetBlock : torch::nn::Module {
     }
 };
 
-    // ResNet(const std::vector<int64_t> layers, int64_t num_classes = 1000,
-    //        bool zero_init_residual = false, int64_t groups = 1,
-    //        int64_t width_per_group = 64,
-    //        std::vector<int64_t> replace_stride_with_dilation = {})
 
 ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefix) {
     int res_blocks = config_parser.GetInt(config_key_prefix + ".res_blocks");
@@ -115,6 +107,11 @@ ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefi
             /*padding = */     1,
             /*bias = */        true)});
 
+    torch::nn::Sequential res_tower_seq;
+    for (int li = 0; li < res_blocks; li++)
+        res_tower_seq->push_back(ResNetBlock(filters));
+    res_tower = register_module("res_tower", res_tower_seq);
+
     m_conv_last = register_module(
         "m_conv_last",
         torch::nn::Conv2d{create_conv_options(
@@ -125,18 +122,7 @@ ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefi
             /*padding = */     1,
             /*bias = */        true)});
 
-//     m_bn1 = register_module("bn1", torch::nn::BatchNorm2d{m_inplanes});
-//     m_relu = register_module("relu", torch::nn::ReLU{true});
-//     m_maxpool = register_module("maxpool", torch::nn::MaxPool2d{torch::nn::MaxPool2dOptions({3, 3}).stride({2, 2}).padding({1, 1})});
-
-//     m_layer1 = register_module("layer1", _make_layer(64, layers.at(0)), 1);
-//     m_layer2 = register_module("layer2", _make_layer(128, layers.at(1), 2), 1);
-//     m_layer3 = register_module("layer3", _make_layer(256, layers.at(2), 2), 1);
-//     m_layer4 = register_module("layer4", _make_layer(512, layers.at(3), 2), 1);
-
-//     m_avgpool = register_module("avgpool", torch::nn::AdaptiveAvgPool2d( torch::nn::AdaptiveAvgPool2dOptions({1, 1})));
-//     m_fc = register_module("fc", torch::nn::Linear(512 * Block::m_expansion, num_classes));
-
+// TODO:
 //     // auto all_modules = modules(false);
 //     // https://pytorch.org/cppdocs/api/classtorch_1_1nn_1_1_module.html#_CPPv4NK5torch2nn6Module7modulesEb
 //     for (auto m : modules(false)) {
@@ -158,43 +144,11 @@ ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefi
 //     }
 }
 
-// torch::nn::Sequential ResNet::_make_layer(int64_t planes, int64_t blocks, int64_t stride) {
-//     torch::nn::Sequential downsample = torch::nn::Sequential();
-//     if ((stride != 1) || (m_inplanes != planes * ResNetBlock::m_expansion)) {
-//         downsample = torch::nn::Sequential(
-//             torch::nn::Conv2d(create_conv1x1_options(m_inplanes, planes * ResNetBlock::m_expansion, stride)),
-//             torch::nn::BatchNorm2d(planes * ResNetBlock::m_expansion));
-//     }
-
-//     torch::nn::Sequential layers;
-
-//     layers->push_back(ResNetBlock(m_inplanes, planes, stride, downsample));
-//     m_inplanes = planes * ResNetBlock::m_expansion;
-//     for (int64_t i = 0; i < blocks; i++) {
-//         layers->push_back(ResNetBlock(m_inplanes, planes, 1,
-//                                 torch::nn::Sequential()));
-//     }
-
-//     return layers;
-// }
 
 torch::Tensor ResNet::forward(torch::Tensor x) {
     x = m_conv_first->forward(x);
+    x = res_tower->forward(x);
     x = m_conv_last->forward(x);
-
-    // x = m_bn1->forward(x);
-    // x = m_relu->forward(x);
-    // x = m_maxpool->forward(x);
-
-    // x = m_layer1->forward(x);
-    // x = m_layer2->forward(x);
-    // x = m_layer3->forward(x);
-    // x = m_layer4->forward(x);
-
-    // x = m_avgpool->forward(x);
-    // x = torch::flatten(x, 1);
-    // x = m_fc->forward(x);
-
     return x;
 }
 

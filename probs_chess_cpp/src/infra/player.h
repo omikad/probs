@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ATen/Device.h>
 #include <vector>
 
 #include "chess/position.h"
@@ -36,6 +37,7 @@ class VQResnetPlayer : public IPlayer {
     private:
         ResNet v_model;
         ResNet q_model;
+        at::Device device;
 };
 
 }  // namespace probs
