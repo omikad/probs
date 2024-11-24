@@ -8,6 +8,7 @@
 #include "utils/exception.h"
 #include "neural/encoder.h"
 #include "utils/torch_utils.h"
+#include "chess/policy_map.h"
 
 using namespace std;
 
@@ -40,21 +41,20 @@ VQResnetPlayer::VQResnetPlayer(const ConfigParser& config_parser, const string& 
 
 
 vector<lczero::Move> VQResnetPlayer::GetActions(const vector<lczero::PositionHistory>& history) {
-    vector<lczero::Move> picked_moves(history.size());
-
     int batch_size = (int)history.size();
+
+    vector<lczero::Move> picked_moves(batch_size);
+    vector<int> transforms(batch_size);
 
     torch::Tensor input_tensor = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
 
     for (int hi = 0; hi < batch_size; hi++) {
-        int transform_out;
-
         lczero::InputPlanes input_planes = lczero::EncodePositionForNN(
             lczero::InputFormat::INPUT_112_WITH_CANONICALIZATION_V2,
             history[hi],
             8,
             lczero::FillEmptyHistory::FEN_ONLY,
-            &transform_out);
+            &transforms[hi]);
 
         assert(input_planes.size() == lczero::kInputPlanes);
 
@@ -66,13 +66,31 @@ vector<lczero::Move> VQResnetPlayer::GetActions(const vector<lczero::PositionHis
         }
     }
 
-    cout << "Input tensor: " << DebugString(input_tensor);
-
     torch::Tensor q_values = q_model.forward(input_tensor);
 
-    cout << "Q values tensor: " << DebugString(q_values);
+    for (int hi = 0; hi < batch_size; hi++) {
+        float best_score = -1000000;
+        lczero::Move best_move;
 
-    throw Exception("TODO");
+        for (auto& move: history[hi].Last().GetBoard().GenerateLegalMoves()) {
+            int move_idx = move.as_nn_index(transforms[hi]);
+            int policy_idx = move_to_policy_idx_map[move_idx];
+            int displacement = policy_idx / 64;
+            int square = policy_idx % 64;
+            int row = square / 8;
+            int col = square % 8;
+            float score = q_values[hi][displacement][row][col].item<float>();
+            
+            if (score > best_score) {
+                best_score = score;
+                best_move = move;
+            }
+        }
+
+        picked_moves[hi] = best_move;        
+    }
+
+    return picked_moves;
 }
 
 

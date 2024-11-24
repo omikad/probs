@@ -48,6 +48,8 @@ void Battle::GoBattle(const ConfigParser& config_parser) {
 
             auto move = ((ply + gi) % 2 == 0 ? player1 : player2)->GetActions({history})[0];
             
+            // cout << "Player " << ((ply + gi) % 2 == 0 ? player1 : player2)->GetName() << " selected move " << move.as_string() << endl;
+
             env_player.Move(move);
         }
 

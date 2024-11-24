@@ -7,12 +7,13 @@
 #include <vector>
 
 #include "chess/position.h"
-#include "neural/network.h"
 #include "utils/exception.h"
 
 
 namespace lczero {
 
+constexpr int kNumOutputPolicyCnt = 1858;
+constexpr int kNumOutputPolicyFilters = 73;
 constexpr int kInputPlanes = 112;
 constexpr int kMoveHistory = 8;
 constexpr int kPlanesPerBoard = 13;

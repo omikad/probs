@@ -105,15 +105,26 @@ ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefi
     cout << "ResNet res_blocks: " << res_blocks << endl;
     cout << "ResNet filters: " << filters << endl;
 
-    m_groups = 1;
-    m_base_width = 64;
-
-    m_conv1 = register_module(
-        "conv1",
+    m_conv_first = register_module(
+        "m_conv_first",
         torch::nn::Conv2d{create_conv_options(
-            /*in_planes = */ 3, /*out_planes = */ m_inplanes,
-            /*kerner_size = */ 7, /*stride = */ 2, /*padding = */ 3,
-            /*groups = */ 1, /*dilation = */ 1, /*bias = */ false)});
+            /*in_planes = */   lczero::kInputPlanes,
+            /*out_planes = */  filters,
+            /*kerner_size = */ 3,
+            /*stride = */      1,
+            /*padding = */     1,
+            /*bias = */        true)});
+
+    m_conv_last = register_module(
+        "m_conv_last",
+        torch::nn::Conv2d{create_conv_options(
+            /*in_planes = */   filters,
+            /*out_planes = */  lczero::kNumOutputPolicyFilters,
+            /*kerner_size = */ 3,
+            /*stride = */      1,
+            /*padding = */     1,
+            /*bias = */        true)});
+
 //     m_bn1 = register_module("bn1", torch::nn::BatchNorm2d{m_inplanes});
 //     m_relu = register_module("relu", torch::nn::ReLU{true});
 //     m_maxpool = register_module("maxpool", torch::nn::MaxPool2d{torch::nn::MaxPool2dOptions({3, 3}).stride({2, 2}).padding({1, 1})});
@@ -147,30 +158,30 @@ ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefi
 //     }
 }
 
-torch::nn::Sequential ResNet::_make_layer(int64_t planes, int64_t blocks, int64_t stride) {
-    torch::nn::Sequential downsample = torch::nn::Sequential();
-    int64_t previous_dilation = m_dilation;
-    if ((stride != 1) || (m_inplanes != planes * ResNetBlock::m_expansion)) {
-        downsample = torch::nn::Sequential(
-            torch::nn::Conv2d(create_conv1x1_options(m_inplanes, planes * ResNetBlock::m_expansion, stride)),
-            torch::nn::BatchNorm2d(planes * ResNetBlock::m_expansion));
-    }
+// torch::nn::Sequential ResNet::_make_layer(int64_t planes, int64_t blocks, int64_t stride) {
+//     torch::nn::Sequential downsample = torch::nn::Sequential();
+//     if ((stride != 1) || (m_inplanes != planes * ResNetBlock::m_expansion)) {
+//         downsample = torch::nn::Sequential(
+//             torch::nn::Conv2d(create_conv1x1_options(m_inplanes, planes * ResNetBlock::m_expansion, stride)),
+//             torch::nn::BatchNorm2d(planes * ResNetBlock::m_expansion));
+//     }
 
-    torch::nn::Sequential layers;
+//     torch::nn::Sequential layers;
 
-    layers->push_back(ResNetBlock(m_inplanes, planes, stride, downsample));
-    m_inplanes = planes * ResNetBlock::m_expansion;
-    for (int64_t i = 0; i < blocks; i++) {
-        layers->push_back(ResNetBlock(m_inplanes, planes, 1,
-                                torch::nn::Sequential()));
-    }
+//     layers->push_back(ResNetBlock(m_inplanes, planes, stride, downsample));
+//     m_inplanes = planes * ResNetBlock::m_expansion;
+//     for (int64_t i = 0; i < blocks; i++) {
+//         layers->push_back(ResNetBlock(m_inplanes, planes, 1,
+//                                 torch::nn::Sequential()));
+//     }
 
-    return layers;
-}
+//     return layers;
+// }
 
 torch::Tensor ResNet::forward(torch::Tensor x) {
-    for (auto x: x.sizes()) cout << x << " "; cout << endl;
-    x = m_conv1->forward(x);
+    x = m_conv_first->forward(x);
+    x = m_conv_last->forward(x);
+
     // x = m_bn1->forward(x);
     // x = m_relu->forward(x);
     // x = m_maxpool->forward(x);
