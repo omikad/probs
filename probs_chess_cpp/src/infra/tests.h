@@ -19,13 +19,8 @@ void PositionHistoryTree_eq_PositionHistory() {
     const int N_GAMES = 1000;
     const int N_MAX_STEPS = 500;
 
-    auto check_correctness = [](int test_i, string test_name, const lczero::PositionHistory& lchistory, PositionHistoryTree& tree, int node) {
-        lczero::PositionHistory tree_history;
-        while (node >= 0) {
-            tree_history.AppendDontCompute__(tree.positions[node]);
-            node = tree.parents[node];
-        }
-        tree_history.ReversePositions__();
+    auto check_correctness = [](const int test_i, const string& test_name, const lczero::PositionHistory& lchistory, const PositionHistoryTree& tree, const int node) {
+        lczero::PositionHistory tree_history = tree.ToLczeroHistory(node);
 
         if (lchistory.GetLength() != tree_history.GetLength()) {
             cout << "Test " << test_i << " " << test_name << ": position lengths are different" << endl;
@@ -79,21 +74,23 @@ void PositionHistoryTree_eq_PositionHistory() {
 
     for (int game_i = 0; game_i < N_GAMES; game_i++) {
         vector<lczero::Move> moves;
-        PositionHistoryTree tree(lczero::ChessBoard::kStartposFen);
 
         {
+            lczero::PositionHistory lchistory(lczero::ChessBoard::kStartposFen);
             EnvPlayer env_player(lczero::ChessBoard::kStartposFen, N_MAX_STEPS);
 
             while (env_player.GameResult() == lczero::GameResult::UNDECIDED) {
-                auto move = player.GetActions({env_player.History()})[0];
+                vector<PositionHistoryTree*> trees = { &env_player.Tree() };
+                auto move = player.GetActions(trees)[0];
                 moves.push_back(move);
 
                 env_player.Move(move);
-                tree.Append(tree.positions.size() - 1, move);
+
+                lchistory.Append(lchistory.Last().GetBoard().GetModernMove(move));
 
                 // cout << "selected move " << move.as_string() << endl;
 
-                check_correctness(test_i, "part 1", env_player.History(), tree, (int)tree.positions.size() - 1);
+                check_correctness(test_i, "part 1", lchistory, env_player.Tree(), env_player.Tree().LastIndex());
                 test_i++;
             }
         }
@@ -103,14 +100,18 @@ void PositionHistoryTree_eq_PositionHistory() {
         while (moves.size() >= trim_i) moves.pop_back();
 
         {
+            lczero::PositionHistory lchistory(lczero::ChessBoard::kStartposFen);
             EnvPlayer env_player(lczero::ChessBoard::kStartposFen, N_MAX_STEPS);
 
             // Replay first part
             for (int step_i = 0; step_i < (int)moves.size(); step_i++) {
-                env_player.Move(moves[step_i]);
+                auto move = moves[step_i];
+                env_player.Move(move);
                 assert (env_player.GameResult() == lczero::GameResult::UNDECIDED);
 
-                check_correctness(test_i, "part 2", env_player.History(), tree, step_i + 1);
+                lchistory.Append(lchistory.Last().GetBoard().GetModernMove(move));
+
+                check_correctness(test_i, "part 2", lchistory, env_player.Tree(), step_i + 1);
                 test_i++;
             }
 
@@ -118,16 +119,17 @@ void PositionHistoryTree_eq_PositionHistory() {
 
             // New random moves
             while (env_player.GameResult() == lczero::GameResult::UNDECIDED) {
-                auto move = player.GetActions({env_player.History()})[0];
+                vector<PositionHistoryTree*> trees = { &env_player.Tree() };
+                auto move = player.GetActions(trees)[0];
 
                 env_player.Move(move);
 
-                tree.Append(node_i, move);
-                node_i = tree.positions.size() - 1;   // newly added node
+                lchistory.Append(lchistory.Last().GetBoard().GetModernMove(move));
+                node_i = env_player.Tree().LastIndex();   // newly added node
 
                 // cout << "selected move " << move.as_string() << endl;
 
-                check_correctness(test_i, "part 3", env_player.History(), tree, (int)tree.positions.size() - 1);
+                check_correctness(test_i, "part 3", lchistory, env_player.Tree(), env_player.Tree().LastIndex());
                 test_i++;
             }
         }

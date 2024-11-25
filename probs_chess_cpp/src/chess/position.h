@@ -133,7 +133,8 @@ class PositionHistory {
   // Appends a position to history.
   void Append(Move m);
 
-  void AppendDontCompute__(Position& position);
+  PositionHistory(const std::string& starting_fen);
+  void AppendDontCompute__(const Position& position);
   void ReversePositions__();
 
   // Pops last move from history.

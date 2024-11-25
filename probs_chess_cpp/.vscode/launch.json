@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "/home/excellent/ds/probs/probs_chess_cpp/build/ProbsChess",
             "args": [
-                "battle",
+                "tests",
                 "../configs/battle_vs_random.yaml"
             ],
             "stopAtEntry": false,

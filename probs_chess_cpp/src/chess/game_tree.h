@@ -1,3 +1,4 @@
+#pragma once
 #include <iostream>
 #include <vector>
 
@@ -18,8 +19,19 @@ class PositionHistoryTree {
 
         lczero::GameResult ComputeGameResult(const int node) const;
 
+        const lczero::Position& Last() const {return positions.back();}
+        const int LastIndex() {
+            assert(positions.size() > 0);
+            return positions.size() - 1;
+        }
+
+        lczero::PositionHistory ToLczeroHistory(const int node) const;
+
         /// @brief create new node based on `node` with applied move `move`. Return new node index
         int Append(const int node, lczero::Move move);
+
+        /// @brief remove last node from the tree
+        void PopLast();
 
         /// @brief node -> board position
         vector<lczero::Position> positions;

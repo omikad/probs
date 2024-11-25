@@ -12,31 +12,26 @@ using namespace std;
 
 namespace probs {
 
-EnvPlayer::EnvPlayer(string starting_fen, int n_max_episode_steps) :
-        n_max_episode_steps(n_max_episode_steps) {
-    lczero::ChessBoard starting_board;
-    int no_capture_ply;
-    int full_moves;
-    starting_board.SetFromFen(starting_fen, &no_capture_ply, &full_moves);
-
-    history.Reset(starting_board, no_capture_ply, full_moves * 2 - (starting_board.flipped() ? 1 : 2));
+EnvPlayer::EnvPlayer(const string& starting_fen, const int n_max_episode_steps) :
+        n_max_episode_steps(n_max_episode_steps),
+        tree(starting_fen) {
     ComputeGameResult();
 }
 
 void EnvPlayer::Move(const lczero::Move &move) {
     if (game_result != lczero::GameResult::UNDECIDED) return;
 
-    auto board = history.Last().GetBoard();
+    auto& board = tree.Last().GetBoard();
     auto new_move = board.GetModernMove(move);
 
-    history.Append(new_move);
+    tree.Append(tree.LastIndex(), new_move);
 
     ComputeGameResult();
 }
 
 void EnvPlayer::ComputeGameResult() {
-    game_result = history.ComputeGameResult();
-    if (game_result == lczero::GameResult::UNDECIDED && history.Last().GetGamePly() >= n_max_episode_steps)
+    game_result = tree.ComputeGameResult(tree.LastIndex());
+    if (game_result == lczero::GameResult::UNDECIDED && tree.Last().GetGamePly() >= n_max_episode_steps)
         game_result = lczero::GameResult::DRAW;
 }
 

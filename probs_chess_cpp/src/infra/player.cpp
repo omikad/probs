@@ -18,17 +18,17 @@ using namespace std;
 
 namespace probs {
 
-vector<lczero::Move> RandomPlayer::GetActions(const vector<lczero::PositionHistory>& history) {
+vector<lczero::Move> RandomPlayer::GetActions(vector<PositionHistoryTree*>& history) {
     vector<lczero::Move> picked_moves(history.size());
 
     for(int hi = 0; hi < history.size(); hi++) {
-        const auto& board = history[hi].Last().GetBoard();
+        const auto& board = history[hi]->Last().GetBoard();
 
         auto legal_moves = board.GenerateLegalMoves();
         if (legal_moves.size() == 0)
             throw Exception("No legal moves found");
 
-        int mi = rand() % (legal_moves.size());
+        int mi = rand() % legal_moves.size();
 
         picked_moves[hi] = legal_moves[mi];
     }
@@ -37,30 +37,23 @@ vector<lczero::Move> RandomPlayer::GetActions(const vector<lczero::PositionHisto
 }
 
 
-vector<lczero::Move> NStepLookaheadPlayer::GetActions(const vector<lczero::PositionHistory>& history) {
+vector<lczero::Move> NStepLookaheadPlayer::GetActions(vector<PositionHistoryTree*>& history) {
     int max_depth = this->depth;
-    // cout << "ga 1" << " max_depth=" << max_depth << endl;
 
-    auto dfs = [&](auto& self, PositionHistoryTree& tree, int node, int depth)->vector<pair<lczero::Move, int>> {
-        // cout << "dfs 1" << endl;
+    auto dfs = [&](auto& self, PositionHistoryTree& tree, const int node, const int depth)->vector<pair<lczero::Move, int>> {
         vector<pair<lczero::Move, int>> result;
 
         bool is_black = tree.positions[node].IsBlackToMove();
 
         for (auto& move : tree.positions[node].GetBoard().GenerateLegalMoves()) {
-            // cout << "dfs 2" << endl;
 
             int kid_node = tree.Append(node, move);
 
-            // cout << "dfs 3" << endl;
-
             lczero::GameResult game_result = tree.ComputeGameResult(kid_node);
 
-            // cout << "dfs 4" << endl;
-
             if (game_result != lczero::GameResult::UNDECIDED) {
-                int score = game_result == lczero::GameResult::DRAW ? 0
-                    : is_black == (game_result == lczero::GameResult::BLACK_WON) ? 1
+                int score = (game_result == lczero::GameResult::DRAW) ? 0
+                    : (is_black == (game_result == lczero::GameResult::BLACK_WON)) ? 1
                     : -1;
 
                 result.push_back({move, score});
@@ -72,29 +65,20 @@ vector<lczero::Move> NStepLookaheadPlayer::GetActions(const vector<lczero::Posit
                 int maxval = -10;
                 for (auto& move_and_score : self(self, tree, kid_node, depth + 1))
                     maxval = max(maxval, move_and_score.second);
-
                 result.push_back({move, -maxval});
             }
-            // cout << "dfs 5" << endl;
         }
 
         return result;
     };
 
-    // cout << "ga 2" << endl;
-
     vector<lczero::Move> picked_moves(history.size());
 
-    // cout << "ga 3" << endl;
-
     for (int hi = 0; hi < history.size(); hi++) {
-        // cout << "ga 4" << endl;
+        auto tree = history[hi];
+        int tree_size_orig = tree->positions.size();
 
-        PositionHistoryTree tree(history[hi]);
-        // cout << "ga 5" << endl;
-
-        auto top_values_and_actions = dfs(dfs, tree, tree.positions.size() - 1, 0);
-        // cout << "ga 6" << endl;
+        auto top_values_and_actions = dfs(dfs, *tree, tree->LastIndex(), 1);
 
         vector<lczero::Move> best_moves;
         int best_score = -10;
@@ -103,15 +87,17 @@ vector<lczero::Move> NStepLookaheadPlayer::GetActions(const vector<lczero::Posit
             if (score > best_score) {
                 best_moves.clear();
                 best_moves.push_back(item.first);
+                best_score = score;
             }
             else if (score == best_score)
                 best_moves.push_back(item.first);
         }
-        // cout << "ga 7" << endl;
 
         picked_moves[hi] = best_moves[rand() % best_moves.size()];
+
+        while (tree->positions.size() > tree_size_orig)
+            tree->PopLast();
     }
-    // cout << "ga 8" << endl;
 
     return picked_moves;
 }
@@ -139,7 +125,7 @@ VQResnetPlayer::VQResnetPlayer(const ConfigParser& config_parser, const string& 
 }
 
 
-vector<lczero::Move> VQResnetPlayer::GetActions(const vector<lczero::PositionHistory>& history) {
+vector<lczero::Move> VQResnetPlayer::GetActions(vector<PositionHistoryTree*>& history) {
     int batch_size = (int)history.size();
 
     vector<lczero::Move> picked_moves(batch_size);
@@ -148,9 +134,11 @@ vector<lczero::Move> VQResnetPlayer::GetActions(const vector<lczero::PositionHis
     torch::Tensor input_tensor = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
 
     for (int hi = 0; hi < batch_size; hi++) {
+        lczero::PositionHistory lchistory = history[hi]->ToLczeroHistory(history[hi]->LastIndex());
+
         lczero::InputPlanes input_planes = lczero::EncodePositionForNN(
             lczero::InputFormat::INPUT_112_WITH_CANONICALIZATION_V2,
-            history[hi],
+            lchistory,
             8,
             lczero::FillEmptyHistory::FEN_ONLY,
             &transforms[hi]);
@@ -172,7 +160,7 @@ vector<lczero::Move> VQResnetPlayer::GetActions(const vector<lczero::PositionHis
         float best_score = -1000000;
         lczero::Move best_move;
 
-        for (auto& move: history[hi].Last().GetBoard().GenerateLegalMoves()) {
+        for (auto& move: history[hi]->Last().GetBoard().GenerateLegalMoves()) {
             int move_idx = move.as_nn_index(transforms[hi]);
             int policy_idx = move_to_policy_idx_map[move_idx];
             int displacement = policy_idx / 64;

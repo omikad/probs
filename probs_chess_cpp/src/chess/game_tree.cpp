@@ -36,6 +36,18 @@ PositionHistoryTree::PositionHistoryTree(const lczero::PositionHistory& lchistor
 }
 
 
+lczero::PositionHistory PositionHistoryTree::ToLczeroHistory(const int node) const {
+    int runnode = node;
+    lczero::PositionHistory lchistory;
+    while (runnode >= 0) {
+        lchistory.AppendDontCompute__(positions[runnode]);
+        runnode = parents[runnode];
+    }
+    lchistory.ReversePositions__();
+    return lchistory;
+}
+
+
 lczero::GameResult PositionHistoryTree::ComputeGameResult(const int node) const {
     auto& position = positions[node];
     const auto& board = position.GetBoard();
@@ -70,6 +82,22 @@ int PositionHistoryTree::Append(const int node, lczero::Move move) {
     positions.back().SetRepetitions(repetitions, cycle_length);
 
     return new_node;
+}
+
+
+void PositionHistoryTree::PopLast() {
+    int removed = positions.size() - 1;
+    int parent = parents[removed];
+
+    positions.pop_back();
+    hashes.pop_back();
+    kids.pop_back();
+    parents.pop_back();
+
+    if (parent >= 0) {
+        auto& par_kids = kids[parent];
+        par_kids.erase(remove(par_kids.begin(), par_kids.end(), removed), par_kids.end());
+    }
 }
 
 

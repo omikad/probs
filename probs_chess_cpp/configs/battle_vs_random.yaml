@@ -1,5 +1,7 @@
 name: 'Battle model vs random'
 player1:
+  # kind: "random"
+  # kind: "one_step_lookahead"
   kind: "two_step_lookahead"
 
 # player1:
@@ -16,8 +18,9 @@ player1:
 
 player2:
   kind: "random"
+  # kind: "two_step_lookahead"
 env:
-  n_max_episode_steps: 200
+  n_max_episode_steps: 500
 infra:
   gpu: -1                               # gpu id, use -1 for cpu
-  evaluate_n_games: 1
+  evaluate_n_games: 100

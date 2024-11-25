@@ -26,7 +26,7 @@ class ChessEnv {
         void move(const optional<string> move_str) {
             if (!move_str.has_value())
                 return;
-            lczero::Move move(move_str.value(), env_player.History().IsBlackToMove());
+            lczero::Move move(move_str.value(), env_player.LastPosition().IsBlackToMove());
             env_player.Move(move);
         }
 
@@ -39,7 +39,7 @@ class ChessEnv {
 
         vector<string> legal_moves() const {
             auto ms = env_player.LastChessBoard().GenerateLegalMoves();
-            bool is_black = env_player.History().IsBlackToMove();
+            bool is_black = env_player.LastPosition().IsBlackToMove();
             vector<string> result;
                 for (auto m : ms) {
                     m = env_player.LastChessBoard().GetLegacyMove(m);
@@ -59,8 +59,8 @@ class ChessEnv {
         }
 
         string as_string() const {
-            bool is_black = env_player.History().IsBlackToMove();
-            return (is_black ? env_player.History().Last().GetThemBoard() : env_player.History().Last().GetBoard())
+            bool is_black = env_player.LastPosition().IsBlackToMove();
+            return (is_black ? env_player.LastPosition().GetThemBoard() : env_player.LastPosition().GetBoard())
                 .DebugString();
         }
 

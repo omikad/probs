@@ -124,7 +124,16 @@ void PositionHistory::Append(Move m) {
   positions_.back().SetRepetitions(repetitions, cycle_length);
 }
 
-void PositionHistory::AppendDontCompute__(Position& position) {
+PositionHistory::PositionHistory(const std::string& starting_fen) {
+  ChessBoard starting_board;
+  int no_capture_ply;
+  int full_moves;
+  starting_board.SetFromFen(starting_fen, &no_capture_ply, &full_moves);
+
+  Reset(starting_board, no_capture_ply, full_moves * 2 - (starting_board.flipped() ? 1 : 2));
+}
+
+void PositionHistory::AppendDontCompute__(const Position& position) {
   positions_.push_back(position);
 }
 

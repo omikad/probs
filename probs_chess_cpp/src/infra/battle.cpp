@@ -44,17 +44,17 @@ void Battle::GoBattle(const ConfigParser& config_parser) {
     for (int gi = 0; gi < evaluate_n_games; gi++) {
         EnvPlayer env_player(starting_fen, n_max_episode_steps);
 
-        int start_player_shift = env_player.History().IsBlackToMove() ? 1 : 0;
+        int start_player_shift = env_player.LastPosition().IsBlackToMove() ? 1 : 0;
 
         while (env_player.GameResult() == lczero::GameResult::UNDECIDED) {
             int ply = env_player.Ply();
-            auto history = env_player.History();
 
             // cout << "Board at step " << ply << ":\n" << curr_board.DebugString() << endl;
 
-            auto move = ((ply + gi) % 2 == 0 ? player1 : player2)->GetActions({history})[0];
+            vector<PositionHistoryTree*> trees = { &env_player.Tree() };
+            auto move = ((ply + gi) % 2 == 0 ? player1 : player2)->GetActions(trees)[0];
             
-            // cout << "Player " << ((ply + gi) % 2 == 0 ? player1 : player2)->GetName() << " selected move " << move.as_string() << endl;
+            // cout << "PLY " << ply << " " << "Player " << ((ply + gi) % 2 == 0 ? player1 : player2)->GetName() << " selected move " << move.as_string() << " " << (int)env_player.GameResult() << endl;
 
             env_player.Move(move);
         }
@@ -81,7 +81,7 @@ void Battle::GoBattle(const ConfigParser& config_parser) {
 
     cout << "Battle " << player1->GetName() << " vs " << player2->GetName() << ":" << endl;
     cout << "Games played: " << battle_info.games_played << endl;
-    cout << "Player [" << player1->GetName() << "]: as white,black:" << endl;
+    cout << "Player " << player1->GetName() << " stats [white,black]:" << endl;
     cout << "   wins: " << battle_info.results[0][0] << ", " << battle_info.results[0][1] << endl;
     cout << "  draws: " << battle_info.results[1][0] << ", " << battle_info.results[1][1] << endl;
     cout << " losses: " << battle_info.results[2][0] << ", " << battle_info.results[2][1] << endl;
