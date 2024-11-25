@@ -5,11 +5,13 @@
 
 #include "chess/bitboard.h"
 #include "chess/board.h"
-#include "infra/player.h"
-#include "utils/exception.h"
-#include "neural/encoder.h"
-#include "utils/torch_utils.h"
+#include "chess/position.h"
 #include "chess/policy_map.h"
+#include "chess/game_tree.h"
+#include "infra/player.h"
+#include "neural/encoder.h"
+#include "utils/exception.h"
+#include "utils/torch_utils.h"
 
 using namespace std;
 
@@ -30,6 +32,86 @@ vector<lczero::Move> RandomPlayer::GetActions(const vector<lczero::PositionHisto
 
         picked_moves[hi] = legal_moves[mi];
     }
+
+    return picked_moves;
+}
+
+
+vector<lczero::Move> NStepLookaheadPlayer::GetActions(const vector<lczero::PositionHistory>& history) {
+    int max_depth = this->depth;
+    // cout << "ga 1" << " max_depth=" << max_depth << endl;
+
+    auto dfs = [&](auto& self, PositionHistoryTree& tree, int node, int depth)->vector<pair<lczero::Move, int>> {
+        // cout << "dfs 1" << endl;
+        vector<pair<lczero::Move, int>> result;
+
+        bool is_black = tree.positions[node].IsBlackToMove();
+
+        for (auto& move : tree.positions[node].GetBoard().GenerateLegalMoves()) {
+            // cout << "dfs 2" << endl;
+
+            int kid_node = tree.Append(node, move);
+
+            // cout << "dfs 3" << endl;
+
+            lczero::GameResult game_result = tree.ComputeGameResult(kid_node);
+
+            // cout << "dfs 4" << endl;
+
+            if (game_result != lczero::GameResult::UNDECIDED) {
+                int score = game_result == lczero::GameResult::DRAW ? 0
+                    : is_black == (game_result == lczero::GameResult::BLACK_WON) ? 1
+                    : -1;
+
+                result.push_back({move, score});
+            }
+            else if (depth == max_depth) {
+                result.push_back({move, 0});
+            }
+            else {
+                int maxval = -10;
+                for (auto& move_and_score : self(self, tree, kid_node, depth + 1))
+                    maxval = max(maxval, move_and_score.second);
+
+                result.push_back({move, -maxval});
+            }
+            // cout << "dfs 5" << endl;
+        }
+
+        return result;
+    };
+
+    // cout << "ga 2" << endl;
+
+    vector<lczero::Move> picked_moves(history.size());
+
+    // cout << "ga 3" << endl;
+
+    for (int hi = 0; hi < history.size(); hi++) {
+        // cout << "ga 4" << endl;
+
+        PositionHistoryTree tree(history[hi]);
+        // cout << "ga 5" << endl;
+
+        auto top_values_and_actions = dfs(dfs, tree, tree.positions.size() - 1, 0);
+        // cout << "ga 6" << endl;
+
+        vector<lczero::Move> best_moves;
+        int best_score = -10;
+        for (auto& item : top_values_and_actions) {
+            int score = item.second;
+            if (score > best_score) {
+                best_moves.clear();
+                best_moves.push_back(item.first);
+            }
+            else if (score == best_score)
+                best_moves.push_back(item.first);
+        }
+        // cout << "ga 7" << endl;
+
+        picked_moves[hi] = best_moves[rand() % best_moves.size()];
+    }
+    // cout << "ga 8" << endl;
 
     return picked_moves;
 }

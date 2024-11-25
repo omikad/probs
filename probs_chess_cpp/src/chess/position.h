@@ -28,6 +28,7 @@
 #pragma once
 
 #include <string>
+#include <algorithm>
 
 #include "chess/board.h"
 
@@ -131,6 +132,9 @@ class PositionHistory {
 
   // Appends a position to history.
   void Append(Move m);
+
+  void AppendDontCompute__(Position& position);
+  void ReversePositions__();
 
   // Pops last move from history.
   void Pop() { positions_.pop_back(); }

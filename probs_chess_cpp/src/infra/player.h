@@ -24,7 +24,17 @@ class RandomPlayer : public IPlayer {
         RandomPlayer(const string& name): name(name) {};
         virtual vector<lczero::Move> GetActions(const vector<lczero::PositionHistory>& history);
         virtual string GetName() {return name;};
-        string name;
+        const string name;
+};
+
+
+class NStepLookaheadPlayer : public IPlayer {
+    public:
+        NStepLookaheadPlayer(const string& name, const int depth): name(name), depth(depth) {};
+        virtual vector<lczero::Move> GetActions(const vector<lczero::PositionHistory>& history);
+        virtual string GetName() {return name;};
+        const string name;
+        const int depth;
 };
 
 
@@ -33,7 +43,7 @@ class VQResnetPlayer : public IPlayer {
         VQResnetPlayer(const ConfigParser& config_parser, const string& config_key_prefix, const string& name);
         virtual vector<lczero::Move> GetActions(const vector<lczero::PositionHistory>& history);
         virtual string GetName() {return name;};
-        string name;
+        const string name;
     private:
         ResNet v_model;
         ResNet q_model;

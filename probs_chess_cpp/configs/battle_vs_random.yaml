@@ -1,20 +1,23 @@
 name: 'Battle model vs random'
 player1:
-  kind: "vq_resnet_player"
-  model:
-    v:
-      type: resnet
-      res_blocks: 3
-      filters: 80
-    q:
-      type: resnet
-      res_blocks: 3
-      filters: 80
+  kind: "two_step_lookahead"
+
+# player1:
+#   kind: "vq_resnet_player"
+#   model:
+#     v:
+#       type: resnet
+#       res_blocks: 3
+#       filters: 80
+#     q:
+#       type: resnet
+#       res_blocks: 3
+#       filters: 80
+
 player2:
   kind: "random"
 env:
-  n_max_episode_steps: 500
+  n_max_episode_steps: 200
 infra:
   gpu: -1                               # gpu id, use -1 for cpu
-  n_threads: 8
-  evaluate_n_games: 1000
+  evaluate_n_games: 1

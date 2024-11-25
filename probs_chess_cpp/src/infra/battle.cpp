@@ -25,6 +25,12 @@ void Battle::GoBattle(const ConfigParser& config_parser) {
             (pi == 1 ? player1 : player2) = new RandomPlayer("RandomPlayer" + to_string(pi));
         else if (kind == "vq_resnet_player")
             (pi == 1 ? player1 : player2) = new VQResnetPlayer(config_parser, "player" + to_string(pi), "VQResnetPlayer" + to_string(pi));
+        else if (kind == "one_step_lookahead")
+            (pi == 1 ? player1 : player2) = new NStepLookaheadPlayer("NStepLookaheadPlayer" + to_string(pi), 1);
+        else if (kind == "two_step_lookahead")
+            (pi == 1 ? player1 : player2) = new NStepLookaheadPlayer("NStepLookaheadPlayer" + to_string(pi), 2);
+        else if (kind == "three_step_lookahead")
+            (pi == 1 ? player1 : player2) = new NStepLookaheadPlayer("NStepLookaheadPlayer" + to_string(pi), 3);
         else
             throw Exception("Unknown player1.kind attribute value");
     }

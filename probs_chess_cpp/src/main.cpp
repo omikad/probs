@@ -6,6 +6,9 @@
 
 #include "infra/config_parser.h"
 #include "infra/battle.h"
+#include "training/train.h"
+#include "utils/exception.h"
+#include "infra/tests.h"
 
 using namespace std;
 
@@ -15,6 +18,8 @@ int main(int argc, char* argv[]) {
         cerr << "Usage: " << argv[0] << "<cmd> <path_to_yaml_file>\n";
         return 1;
     }
+
+    srand(time(NULL));
 
     string command = argv[1];
     string configFilePath = argv[2];
@@ -30,17 +35,18 @@ int main(int argc, char* argv[]) {
 
         lczero::InitializeMagicBitboards();
 
-        // torch::Tensor tensor = torch::rand({2, 3});
-        // cout << tensor << endl;
-
-        // lczero::ChessBoard board;
-        // board.SetFromFen(lczero::ChessBoard::kStartposFen);
-        // cout << board.DebugString() << endl;
-
         if (command == "battle") {
-            srand(time(NULL));
             probs::Battle::GoBattle(config);
         }
+        else if (command == "train") {
+            probs::ProbsImpl probs(config);
+            probs.GoTrain();
+        }
+        else if (command == "tests") {
+            probs::PositionHistoryTree_eq_PositionHistory();
+        }
+        else
+            throw probs::Exception("Unknown command " + command);
     } catch (const exception& e) {
         cerr << "Error: " << e.what() << "\n";
         return 1;

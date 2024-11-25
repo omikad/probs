@@ -124,6 +124,14 @@ void PositionHistory::Append(Move m) {
   positions_.back().SetRepetitions(repetitions, cycle_length);
 }
 
+void PositionHistory::AppendDontCompute__(Position& position) {
+  positions_.push_back(position);
+}
+
+void PositionHistory::ReversePositions__() {
+  std::reverse(begin(positions_), end(positions_));
+}
+
 int PositionHistory::ComputeLastMoveRepetitions(int* cycle_length) const {
   *cycle_length = 0;
   const auto& last = positions_.back();
