@@ -10,19 +10,23 @@ void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQu
     auto thread_id = this_thread::get_id();
     cout << "[Worker " << thread_id << "] started." << endl;
 
-    while (true) {
-        auto command = taskQueue.dequeue();
-        if (!command) break; // Exit signal
+    try {
+        while (true) {
+            auto command = taskQueue.dequeue();
+            if (!command) break; // Exit signal
 
-        if (auto command_self_play = dynamic_pointer_cast<QueueCommand_SelfPlay>(command)) {
-            // cout << "[Worker " << thread_id << "] Got command self play " << command_self_play->n_games << " games" << endl;
-            auto rows = SelfPlay(impl.config_parser, command_self_play->n_games);
-            resultsQueue.enqueue(make_shared<QueueResponse_SelfPlay>(rows));
-        } else {
-            cout << "[Worker " << thread_id << "] Unknown command type!" << endl;
+            if (auto command_self_play = dynamic_pointer_cast<QueueCommand_SelfPlay>(command)) {
+                // cout << "[Worker " << thread_id << "] Got command self play " << command_self_play->n_games << " games" << endl;
+                auto rows = SelfPlay(impl.config_parser, command_self_play->n_games);
+                resultsQueue.enqueue(make_shared<QueueResponse_SelfPlay>(rows));
+            } else {
+                cout << "[Worker " << thread_id << "] Unknown command type!" << endl;
+            }
         }
+        cout << "[Worker " << thread_id << "] stopped." << endl;
+    } catch (const exception& e) {
+        cerr << "Error: " << e.what() << "\n";
     }
-    cout << "[Worker " << thread_id << "] stopped." << endl;
 }
 
 
@@ -36,7 +40,7 @@ ProbsImpl::ProbsImpl(const ConfigParser& config_parser) : config_parser(config_p
 }
 
 
-void ProbsImpl::TrainV(const int v_train_episodes, const double dataset_drop_ratio) {
+void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes, const double dataset_drop_ratio) {
     int wcnt = workers.size();
 
     vector<int> worker_games(wcnt, v_train_episodes / wcnt);
@@ -49,7 +53,7 @@ void ProbsImpl::TrainV(const int v_train_episodes, const double dataset_drop_rat
             taskQueues[wi].enqueue(make_shared<QueueCommand_SelfPlay>(curr_games));
     }
 
-    vector<pair<lczero::InputPlanes, float>> v_dataset;
+    vector<pair<torch::Tensor, float>> v_dataset;
 
     for (int wi = 0; wi < wcnt; wi++) {
         auto response = resultQueues[wi].dequeue();
@@ -61,7 +65,8 @@ void ProbsImpl::TrainV(const int v_train_episodes, const double dataset_drop_rat
         }
     }
 
-    cout << "V dataset created with " << v_dataset.size() << " rows" << endl;
+    ResNet v_model(config_parser, "model.v", true);             // TODO: load V
+    TrainV(config_parser, v_model, v_dataset);
 }
 
 
@@ -75,7 +80,7 @@ void ProbsImpl::GoTrain() {
     cout << "  dataset_drop_ratio = " << dataset_drop_ratio << endl;
 
     for (int high_level_i = 0; high_level_i < n_high_level_iterations; high_level_i++) {
-        TrainV(v_train_episodes, dataset_drop_ratio);
+        SelfPlayAndTrainV(v_train_episodes, dataset_drop_ratio);
 
     }
 

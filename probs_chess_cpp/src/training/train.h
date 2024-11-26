@@ -34,8 +34,8 @@ public:
 
 class QueueResponse_SelfPlay : public QueueItem {
 public:
-    std::vector<std::pair<lczero::InputPlanes, float>> v_dataset;
-    explicit QueueResponse_SelfPlay(const std::vector<std::pair<lczero::InputPlanes, float>>& rows) : v_dataset(rows) {}
+    std::vector<std::pair<torch::Tensor, float>> v_dataset;
+    explicit QueueResponse_SelfPlay(const std::vector<std::pair<torch::Tensor, float>>& rows) : v_dataset(rows) {}
 };
 
 
@@ -43,7 +43,7 @@ class ProbsImpl {
     public:
         ProbsImpl(const ConfigParser& config_parser);
         void GoTrain();
-        void TrainV(const int v_train_episodes, const double dataset_drop_ratio);
+        void SelfPlayAndTrainV(const int v_train_episodes, const double dataset_drop_ratio);
         const ConfigParser& config_parser;
 
     private:

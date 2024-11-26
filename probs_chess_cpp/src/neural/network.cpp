@@ -84,12 +84,12 @@ struct ResNetBlock : torch::nn::Module {
 };
 
 
-ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefix) {
+ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefix, const bool true_if_v_else_q) : true_if_v_else_q(true_if_v_else_q) {
     int res_blocks = config_parser.GetInt(config_key_prefix + ".res_blocks");
     int filters = config_parser.GetInt(config_key_prefix + ".filters");
-    cout << "ResNet config_key_prefix: " << config_key_prefix << endl;
-    cout << "ResNet res_blocks: " << res_blocks << endl;
-    cout << "ResNet filters: " << filters << endl;
+    cout << "ResNet " << (true_if_v_else_q ? "V" : "Q") << " config_key_prefix: " << config_key_prefix << endl;
+    cout << "ResNet " << (true_if_v_else_q ? "V" : "Q") << " res_blocks: " << res_blocks << endl;
+    cout << "ResNet " << (true_if_v_else_q ? "V" : "Q") << " filters: " << filters << endl;
 
     m_conv_first = register_module(
         "m_conv_first",
@@ -101,10 +101,10 @@ ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefi
             /*padding = */     1,
             /*bias = */        true)});
 
-    torch::nn::Sequential res_tower_seq;
+    torch::nn::Sequential m_res_tower_seq;
     for (int li = 0; li < res_blocks; li++)
-        res_tower_seq->push_back(ResNetBlock(filters));
-    res_tower = register_module("res_tower", res_tower_seq);
+        m_res_tower_seq->push_back(ResNetBlock(filters));
+    m_res_tower = register_module("m_res_tower", m_res_tower_seq);
 
     m_conv_last = register_module(
         "m_conv_last",
@@ -115,6 +115,20 @@ ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefi
             /*stride = */      1,
             /*padding = */     1,
             /*bias = */        true)});
+
+    if (true_if_v_else_q) {
+        m_v_conv_last = register_module(
+            "m_v_conv_last",
+            torch::nn::Conv2d{create_conv_options(
+                /*in_planes = */   lczero::kNumOutputPolicyFilters,
+                /*out_planes = */  1,
+                /*kerner_size = */ 3,
+                /*stride = */      1,
+                /*padding = */     1,
+                /*bias = */        true)});
+
+        m_v_fc = register_module("m_v_fc", torch::nn::Linear(64, 1));
+    }
 
 // TODO:
 //     // auto all_modules = modules(false);
@@ -141,8 +155,15 @@ ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefi
 
 torch::Tensor ResNet::forward(torch::Tensor x) {
     x = m_conv_first->forward(x);
-    x = res_tower->forward(x);
+    x = m_res_tower->forward(x);
     x = m_conv_last->forward(x);
+
+    if (true_if_v_else_q) {
+        x = m_v_conv_last->forward(x);
+        x = x.view({x.sizes()[0], -1});
+        x = m_v_fc->forward(x);
+    }
+
     return x;
 }
 

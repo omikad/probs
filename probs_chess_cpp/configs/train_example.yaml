@@ -20,8 +20,9 @@ training:
 #   tree_max_depth: 10000
 #   tree_q_batch_size: 16
 #   exploration_num_sampling_moves: 10
-#   learning_rate: 0.0003
-#   batch_size: 16
+  batch_size: 16
+  learning_rate: 0.0003
+  weight_decay: 0.00001
 infra:
   gpu: -1                               # gpu id, use -1 for cpu
   n_threads: 2

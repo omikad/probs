@@ -93,8 +93,8 @@ vector<lczero::Move> NStepLookaheadPlayer::GetActions(vector<PositionHistoryTree
 VQResnetPlayer::VQResnetPlayer(const ConfigParser& config_parser, const string& config_key_prefix, const string& name):
         name(name),
         device(torch::kCPU),
-        v_model(config_parser, config_key_prefix + ".model.v"),
-        q_model(config_parser, config_key_prefix + ".model.q") {
+        v_model(config_parser, config_key_prefix + ".model.v", true),
+        q_model(config_parser, config_key_prefix + ".model.q", false) {
 
     int gpu_num = config_parser.GetInt("infra.gpu");
     cout << "VQResnetPlayer GPU: " << gpu_num << endl;
