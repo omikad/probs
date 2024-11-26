@@ -1,11 +1,16 @@
+#pragma once
+
 #include <iostream>
 #include <vector>
+#include <string>
 
-#include "infra/env_player.h"
+#include "chess/bitboard.h"
 #include "chess/board.h"
-#include "infra/player.h"
 #include "chess/game_tree.h"
 #include "chess/position.h"
+#include "utils/callbacks.h"
+#include "infra/player.h"
+#include "infra/env_player.h"
 #include "utils/exception.h"
 #include "neural/encoder.h"
 

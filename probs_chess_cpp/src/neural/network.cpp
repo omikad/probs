@@ -2,13 +2,7 @@
     Based on: https://github.com/leimao/LibTorch-ResNet-CIFAR/blob/main/src/resnet.cpp
 */
 
-#include <torch/torch.h>
-#include <ATen/Device.h>
-#include <iostream>
-
 #include "neural/network.h"
-#include "infra/config_parser.h"
-#include "utils/exception.h"
 
 using namespace std;
 

@@ -1,11 +1,4 @@
-#include <string>
-
 #include "infra/env_player.h"
-#include "chess/bitboard.h"
-#include "chess/board.h"
-#include "utils/callbacks.h"
-#include "chess/position.h"
-#include "env_player.h"
 
 using namespace std;
 

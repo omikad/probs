@@ -1,8 +1,8 @@
 #pragma once
-#include <iostream>
 #include <vector>
-#include <thread>
+#include <utility>
 #include <iostream>
+#include <thread>
 #include <queue>
 #include <mutex>
 #include <condition_variable>
@@ -11,10 +11,9 @@
 #include <torch/torch.h>
 
 #include "infra/config_parser.h"
-#include "utils/ts_queue.h"
 #include "neural/encoder.h"
-
-using namespace std;
+#include "utils/ts_queue.h"
+#include "training/v_train.h"
 
 
 namespace probs {
@@ -35,8 +34,8 @@ public:
 
 class QueueResponse_SelfPlay : public QueueItem {
 public:
-    vector<pair<lczero::InputPlanes, float>> v_dataset;
-    explicit QueueResponse_SelfPlay(const vector<pair<lczero::InputPlanes, float>>& rows) : v_dataset(rows) {}
+    std::vector<std::pair<lczero::InputPlanes, float>> v_dataset;
+    explicit QueueResponse_SelfPlay(const std::vector<std::pair<lczero::InputPlanes, float>>& rows) : v_dataset(rows) {}
 };
 
 
@@ -44,12 +43,13 @@ class ProbsImpl {
     public:
         ProbsImpl(const ConfigParser& config_parser);
         void GoTrain();
+        void TrainV(const int v_train_episodes, const double dataset_drop_ratio);
+        const ConfigParser& config_parser;
 
     private:
-        const ConfigParser& config_parser;
-        vector<SafeQueue<shared_ptr<QueueItem>>> taskQueues;
-        vector<SafeQueue<shared_ptr<QueueItem>>> resultQueues;
-        vector<thread> workers;
+        std::vector<SafeQueue<std::shared_ptr<QueueItem>>> taskQueues;
+        std::vector<SafeQueue<std::shared_ptr<QueueItem>>> resultQueues;
+        std::vector<std::thread> workers;
 };
 
 }  // namespace probs

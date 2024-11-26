@@ -2,19 +2,17 @@ name: 'Battle model vs random'
 player1:
   # kind: "random"
   # kind: "one_step_lookahead"
-  kind: "two_step_lookahead"
-
-# player1:
-#   kind: "vq_resnet_player"
-#   model:
-#     v:
-#       type: resnet
-#       res_blocks: 3
-#       filters: 80
-#     q:
-#       type: resnet
-#       res_blocks: 3
-#       filters: 80
+  # kind: "two_step_lookahead"
+  kind: "vq_resnet_player"
+  model:
+    v:
+      type: resnet
+      res_blocks: 3
+      filters: 80
+    q:
+      type: resnet
+      res_blocks: 3
+      filters: 80
 
 player2:
   kind: "random"

@@ -20,7 +20,9 @@ namespace probs {
 
 class Exception : public std::runtime_error {
  public:
-  Exception(const std::string& what) : std::runtime_error(what) {}
+  Exception(const std::string& what) : std::runtime_error(what) {
+    std::cerr << what << std::endl;
+  }
 };
 
 }  // namespace probs

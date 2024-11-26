@@ -6,14 +6,12 @@
 #include "chess/position.h"
 #include "chess/game_tree.h"
 
-using namespace std;
-
 
 namespace probs {
 
 class EnvPlayer {
     public:
-        EnvPlayer(const string& starting_fen, const int n_max_episode_steps);
+        EnvPlayer(const std::string& starting_fen, const int n_max_episode_steps);
         void Move(const lczero::Move& move);
         PositionHistoryTree& Tree() {return tree;}
         const lczero::Position& LastPosition() const {return tree.Last();}

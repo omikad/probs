@@ -1,17 +1,4 @@
-#include <iostream>
-#include <vector>
-#include <ATen/Device.h>
-#include <torch/torch.h>
-
-#include "chess/bitboard.h"
-#include "chess/board.h"
-#include "chess/position.h"
-#include "chess/policy_map.h"
-#include "chess/game_tree.h"
 #include "infra/player.h"
-#include "neural/encoder.h"
-#include "utils/exception.h"
-#include "utils/torch_utils.h"
 
 using namespace std;
 
@@ -126,59 +113,14 @@ VQResnetPlayer::VQResnetPlayer(const ConfigParser& config_parser, const string& 
 
 
 vector<lczero::Move> VQResnetPlayer::GetActions(vector<PositionHistoryTree*>& history) {
-    int batch_size = (int)history.size();
+    int batch_size = history.size();
 
-    vector<lczero::Move> picked_moves(batch_size);
-    vector<int> transforms(batch_size);
+    vector<int> nodes(batch_size);
+    for (int bi = 0; bi < batch_size; bi++) nodes[bi] = history[bi]->LastIndex();
 
-    torch::Tensor input_tensor = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
+    auto encoded_batch = GetQModelEstimation(history, nodes, q_model, device);
 
-    for (int hi = 0; hi < batch_size; hi++) {
-        lczero::PositionHistory lchistory = history[hi]->ToLczeroHistory(history[hi]->LastIndex());
-
-        lczero::InputPlanes input_planes = lczero::EncodePositionForNN(
-            lczero::InputFormat::INPUT_112_WITH_CANONICALIZATION_V2,
-            lchistory,
-            8,
-            lczero::FillEmptyHistory::FEN_ONLY,
-            &transforms[hi]);
-
-        assert(input_planes.size() == lczero::kInputPlanes);
-
-        for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
-            const auto& plane = input_planes[pi];
-            for (auto bit : lczero::IterateBits(plane.mask)) {
-                input_tensor[hi][pi][bit / 8][bit % 8] = plane.value;
-            }
-        }
-    }
-
-    input_tensor = input_tensor.to(device);
-    torch::Tensor q_values = q_model.forward(input_tensor);
-
-    for (int hi = 0; hi < batch_size; hi++) {
-        float best_score = -1000000;
-        lczero::Move best_move;
-
-        for (auto& move: history[hi]->Last().GetBoard().GenerateLegalMoves()) {
-            int move_idx = move.as_nn_index(transforms[hi]);
-            int policy_idx = move_to_policy_idx_map[move_idx];
-            int displacement = policy_idx / 64;
-            int square = policy_idx % 64;
-            int row = square / 8;
-            int col = square % 8;
-            float score = q_values[hi][displacement][row][col].item<float>();
-            
-            if (score > best_score) {
-                best_score = score;
-                best_move = move;
-            }
-        }
-
-        picked_moves[hi] = best_move;        
-    }
-
-    return picked_moves;
+    return encoded_batch->FindBestMoves();
 }
 
 

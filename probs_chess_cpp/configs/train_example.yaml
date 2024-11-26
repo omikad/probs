@@ -1,4 +1,6 @@
 name: 'Example training run'
+env:
+  n_max_episode_steps: 500
 model:
   v:
     type: resnet
@@ -8,13 +10,11 @@ model:
     type: resnet
     res_blocks: 3
     filters: 80
-env:
-  n_max_episode_steps: 500
 training:
-  n_high_level_iterations: 10
-#   v_train_episodes: 1000
+  n_high_level_iterations: 1
+  v_train_episodes: 10
 #   q_train_episodes: 100
-#   dataset_drop_ratio: 0.5
+  dataset_drop_ratio: 0.5
 #   q_dataset_episodes_sub_iter: 1
 #   tree_num_q_s_a_calls: 100
 #   tree_max_depth: 10000
@@ -24,7 +24,7 @@ training:
 #   batch_size: 16
 infra:
   gpu: -1                               # gpu id, use -1 for cpu
-  n_threads: 8
+  n_threads: 2
   # checkpoints_dir: 'checkpoints'
   # evaluate_n_games: 100
   # log: 'mem'                            # write learning curves to 'tf' or 'mem'
