@@ -28,7 +28,7 @@ struct EncodedPositionBatch {
 std::shared_ptr<EncodedPositionBatch> GetQModelEstimation(
     const std::vector<PositionHistoryTree*>& trees,
     const std::vector<int>& nodes,
-    ResNet& q_model,
+    ResNet q_model,
     at::Device& device);
 
 }  // namespace probs

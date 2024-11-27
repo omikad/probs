@@ -31,7 +31,7 @@ vector<lczero::Move> const EncodedPositionBatch::FindBestMoves() {
 shared_ptr<EncodedPositionBatch> GetQModelEstimation(
         const vector<PositionHistoryTree*>& trees,
         const vector<int>& nodes,
-        ResNet& q_model,
+        ResNet q_model,
         at::Device& device) {
     assert(trees.size() == nodes.size());
     int batch_size = nodes.size();
@@ -64,7 +64,7 @@ shared_ptr<EncodedPositionBatch> GetQModelEstimation(
     }
 
     result.tensor.to(device);
-    torch::Tensor q_values = q_model.forward(result.tensor);
+    torch::Tensor q_values = q_model->forward(result.tensor);
 
     result.moves_estimation.resize(batch_size);
 

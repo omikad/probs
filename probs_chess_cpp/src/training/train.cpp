@@ -17,7 +17,7 @@ void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQu
 
             if (auto command_self_play = dynamic_pointer_cast<QueueCommand_SelfPlay>(command)) {
                 // cout << "[Worker " << thread_id << "] Got command self play " << command_self_play->n_games << " games" << endl;
-                auto rows = SelfPlay(impl.config_parser, command_self_play->n_games);
+                auto rows = SelfPlay(impl.model_keeper.q_model, impl.config_parser, command_self_play->n_games);
                 resultsQueue.enqueue(make_shared<QueueResponse_SelfPlay>(rows));
             } else {
                 cout << "[Worker " << thread_id << "] Unknown command type!" << endl;
@@ -30,7 +30,9 @@ void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQu
 }
 
 
-ProbsImpl::ProbsImpl(const ConfigParser& config_parser) : config_parser(config_parser) {
+ProbsImpl::ProbsImpl(const ConfigParser& config_parser)
+        : config_parser(config_parser),
+        model_keeper(config_parser, "model.v", "model.q", "training") {
     int n_threads = config_parser.GetInt("infra.n_threads");
     taskQueues = vector<SafeQueue<shared_ptr<QueueItem>>>(n_threads);
     resultQueues = vector<SafeQueue<shared_ptr<QueueItem>>>(n_threads);
@@ -65,8 +67,7 @@ void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes, const double datas
         }
     }
 
-    ResNet v_model(config_parser, "model.v", true);             // TODO: load V
-    TrainV(config_parser, v_model, v_dataset);
+    TrainV(config_parser, model_keeper.v_model, model_keeper.v_optimizer, v_dataset);
 }
 
 
@@ -82,6 +83,7 @@ void ProbsImpl::GoTrain() {
     for (int high_level_i = 0; high_level_i < n_high_level_iterations; high_level_i++) {
         SelfPlayAndTrainV(v_train_episodes, dataset_drop_ratio);
 
+        model_keeper.SaveCheckpoint();
     }
 
     // Shutdown workers

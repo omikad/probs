@@ -15,8 +15,8 @@
 
 namespace probs {
 
-std::vector<std::pair<torch::Tensor, float>> SelfPlay(const ConfigParser& config_parser, const int n_games);
+std::vector<std::pair<torch::Tensor, float>> SelfPlay(ResNet q_model, const ConfigParser& config_parser, const int n_games);
 
-void TrainV(const ConfigParser& config_parser, ResNet& v_model, std::vector<std::pair<torch::Tensor, float>>& v_dataset);
+void TrainV(const ConfigParser& config_parser, ResNet v_model, torch::optim::AdamW& v_optimizer, std::vector<std::pair<torch::Tensor, float>>& v_dataset);
 
 }  // namespace probs

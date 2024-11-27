@@ -103,12 +103,12 @@ VQResnetPlayer::VQResnetPlayer(const ConfigParser& config_parser, const string& 
             device = at::Device("cuda:" + to_string(gpu_num));
         else
             throw Exception("Config points to GPU which is not available (config parameter infra.gpu)");
-        v_model.to(device);
-        q_model.to(device);
+        v_model->to(device);
+        q_model->to(device);
     }
 
-    cout << DebugString(v_model) << endl;
-    cout << DebugString(q_model) << endl;
+    cout << DebugString(*v_model) << endl;
+    cout << DebugString(*q_model) << endl;
 }
 
 

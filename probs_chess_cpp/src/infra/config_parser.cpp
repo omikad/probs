@@ -15,6 +15,20 @@ ConfigParser::ConfigParser(const string& file_path) {
     config = YAML::LoadFile(file_path);
 }
 
+bool ConfigParser::KeyExist(const std::string& key) const {
+    istringstream key_stream(key);
+    string token;
+    vector<YAML::Node> n{config};
+
+    while (getline(key_stream, token, '.')) {
+        if (!n.back()[token]) {
+            return false;
+        }
+        n.push_back(n.back()[token]);
+    }
+    return true;
+}
+
 YAML::Node ConfigParser::GetNode(const string& key) const {
     istringstream key_stream(key);
     string token;

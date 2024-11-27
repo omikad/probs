@@ -8,6 +8,7 @@ class ConfigParser {
 public:
     explicit ConfigParser(const std::string& file_path);
 
+    bool KeyExist(const std::string& key) const;
     std::string GetString(const std::string& key) const;
     int GetInt(const std::string& key) const;
     double GetDouble(const std::string& key) const;

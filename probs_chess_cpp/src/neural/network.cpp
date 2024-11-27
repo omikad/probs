@@ -84,7 +84,7 @@ struct ResNetBlock : torch::nn::Module {
 };
 
 
-ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefix, const bool true_if_v_else_q) : true_if_v_else_q(true_if_v_else_q) {
+ResNetImpl::ResNetImpl(const ConfigParser& config_parser, const string& config_key_prefix, const bool true_if_v_else_q) : true_if_v_else_q(true_if_v_else_q) {
     int res_blocks = config_parser.GetInt(config_key_prefix + ".res_blocks");
     int filters = config_parser.GetInt(config_key_prefix + ".filters");
     cout << "ResNet " << (true_if_v_else_q ? "V" : "Q") << " config_key_prefix: " << config_key_prefix << endl;
@@ -153,7 +153,7 @@ ResNet::ResNet(const ConfigParser& config_parser, const string& config_key_prefi
 }
 
 
-torch::Tensor ResNet::forward(torch::Tensor x) {
+torch::Tensor ResNetImpl::forward(torch::Tensor x) {
     x = m_conv_first->forward(x);
     x = m_res_tower->forward(x);
     x = m_conv_last->forward(x);

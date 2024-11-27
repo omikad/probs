@@ -5,15 +5,16 @@ using namespace std;
 
 namespace probs {
 
-vector<pair<torch::Tensor, float>> SelfPlay(const ConfigParser& config_parser, const int n_games) {
+vector<pair<torch::Tensor, float>> SelfPlay(ResNet q_model, const ConfigParser& config_parser, const int n_games) {
     vector<pair<torch::Tensor, float>> rows;
 
     // TODO: check if tensor being copied
 
-    ResNet q_model(config_parser, "model.q", false);      // TODO: load Q
     at::Device device(torch::kCPU);                       // TODO: try gpu in threads?
 
     int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps");
+    double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio");
+
     string starting_fen = lczero::ChessBoard::kStartposFen;
 
     for (int gi = 0; gi < n_games; gi++) {
@@ -26,7 +27,8 @@ vector<pair<torch::Tensor, float>> SelfPlay(const ConfigParser& config_parser, c
             vector<PositionHistoryTree*> trees = {&env_player.Tree()};
             auto encoded_batch = GetQModelEstimation(trees, {env_player.Tree().LastIndex()}, q_model, device);
 
-            rows.push_back({encoded_batch->tensor, 0});
+            if (rand() % 1000000 > dataset_drop_ratio * 1000000)
+                rows.push_back({encoded_batch->tensor, 0});
 
             if (env_player.GameResult() != lczero::GameResult::UNDECIDED)
                 break;
@@ -51,18 +53,11 @@ vector<pair<torch::Tensor, float>> SelfPlay(const ConfigParser& config_parser, c
 }
 
 
-void TrainV(const ConfigParser& config_parser, ResNet& v_model, vector<pair<torch::Tensor, float>>& v_dataset) {
+void TrainV(const ConfigParser& config_parser, ResNet v_model, torch::optim::AdamW& v_optimizer, vector<pair<torch::Tensor, float>>& v_dataset) {
     int dataset_size = v_dataset.size();
     cout << "[Train.V] Train V model on dataset with " << dataset_size << " rows" << endl;
 
     int batch_size = config_parser.GetInt("training.batch_size");
-    float learning_rate = config_parser.GetDouble("training.learning_rate");
-    float weight_decay = config_parser.GetDouble("training.weight_decay");
-
-    torch::optim::AdamWOptions adam_options(learning_rate);
-    adam_options.weight_decay(weight_decay);
-
-    torch::optim::AdamW optimizer(v_model.parameters(), adam_options);   // TODO: Save/load to checkpoint
 
     vector<int> indices(dataset_size);
     for (int i = 0; i < dataset_size; i++) indices[i] = i;
@@ -78,11 +73,11 @@ void TrainV(const ConfigParser& config_parser, ResNet& v_model, vector<pair<torc
         }
         torch::Tensor input = torch::cat(input_arr);
 
-        optimizer.zero_grad();
+        v_optimizer.zero_grad();
 
         // cout << "Input: " << DebugString(input) << endl;
 
-        torch::Tensor prediction = v_model.forward(input);
+        torch::Tensor prediction = v_model->forward(input);
 
         // cout << "Prediction: " << DebugString(prediction) << endl;
 
@@ -92,7 +87,7 @@ void TrainV(const ConfigParser& config_parser, ResNet& v_model, vector<pair<torc
 
         loss.backward();
 
-        optimizer.step();
+        v_optimizer.step();
 
         cout << "Loss: " << loss.item<float>() << endl;
     }

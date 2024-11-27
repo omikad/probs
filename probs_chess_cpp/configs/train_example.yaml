@@ -20,12 +20,15 @@ training:
 #   tree_max_depth: 10000
 #   tree_q_batch_size: 16
 #   exploration_num_sampling_moves: 10
-  batch_size: 16
+  batch_size: 128
   learning_rate: 0.0003
   weight_decay: 0.00001
+  checkpoints_dir: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints'
+
+  # resume from checkpoint:
+  # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241127-125453*'
 infra:
   gpu: -1                               # gpu id, use -1 for cpu
   n_threads: 2
-  # checkpoints_dir: 'checkpoints'
   # evaluate_n_games: 100
   # log: 'mem'                            # write learning curves to 'tf' or 'mem'

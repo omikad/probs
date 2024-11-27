@@ -13,6 +13,7 @@
 #include "infra/config_parser.h"
 #include "neural/encoder.h"
 #include "utils/ts_queue.h"
+#include "training/model_keeper.h"
 #include "training/v_train.h"
 
 
@@ -45,6 +46,7 @@ class ProbsImpl {
         void GoTrain();
         void SelfPlayAndTrainV(const int v_train_episodes, const double dataset_drop_ratio);
         const ConfigParser& config_parser;
+        ModelKeeper model_keeper;
 
     private:
         std::vector<SafeQueue<std::shared_ptr<QueueItem>>> taskQueues;

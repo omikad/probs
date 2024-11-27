@@ -12,9 +12,9 @@
 
 namespace probs {
 
-struct ResNet : torch::nn::Module {
+struct ResNetImpl : torch::nn::Module {
     public:
-        ResNet(const ConfigParser& config_parser, const std::string& config_key_prefix, const bool true_if_v_else_q);
+        ResNetImpl(const ConfigParser& config_parser, const std::string& config_key_prefix, const bool true_if_v_else_q);
         torch::Tensor forward(torch::Tensor x);
     private:
         bool true_if_v_else_q;
@@ -24,5 +24,6 @@ struct ResNet : torch::nn::Module {
         torch::nn::Conv2d m_v_conv_last{nullptr};
         torch::nn::Linear m_v_fc{nullptr};
 };
+TORCH_MODULE(ResNet);
 
 }  // namespace probs
