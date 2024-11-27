@@ -5,51 +5,110 @@ using namespace std;
 
 namespace probs {
 
-vector<pair<torch::Tensor, float>> SelfPlay(ResNet q_model, const ConfigParser& config_parser, const int n_games) {
+vector<pair<torch::Tensor, float>> SelfPlay(ResNet q_model, const ConfigParser& config_parser, const int n_games, at::Device& device) {
     torch::NoGradGuard no_grad;
-
-    vector<pair<torch::Tensor, float>> rows;
 
     // TODO: check if tensor being copied
 
-    at::Device device(torch::kCPU);                       // TODO: try gpu in threads?
-
+    int batch_size = config_parser.GetInt("training.batch_size");
     int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps");
     double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio");
 
-    string starting_fen = lczero::ChessBoard::kStartposFen;
+    int game_idx = 0;
+    vector<float> game_scores(n_games, 0);
 
-    for (int gi = 0; gi < n_games; gi++) {
-        int start_rows_index = rows.size();
-        EnvPlayer env_player(starting_fen, n_max_episode_steps);
+    vector<pair<torch::Tensor, float>> rows;
+    vector<int> row_game_indices;
 
-        bool is_first_black = env_player.LastPosition().IsBlackToMove();
+    vector<shared_ptr<EnvPlayer>> envs;
+    vector<int> game_indices;
 
-        while (true) {
-            vector<PositionHistoryTree*> trees = {&env_player.Tree()};
-            auto encoded_batch = GetQModelEstimation(trees, {env_player.Tree().LastIndex()}, q_model, device);
+    while (game_idx < n_games || envs.size() > 0) {
 
-            if (rand() % 1000000 > dataset_drop_ratio * 1000000)
-                rows.push_back({encoded_batch->tensor, 0});
-
-            if (env_player.GameResult() != lczero::GameResult::UNDECIDED)
-                break;
-
-            auto move = encoded_batch->FindBestMoves()[0];
-            env_player.Move(move);
+        if (envs.size() < batch_size && game_idx < n_games) {
+            envs.push_back(make_shared<EnvPlayer>(EnvPlayer(lczero::ChessBoard::kStartposFen, n_max_episode_steps)));
+            game_indices.push_back(game_idx);
+            game_idx++;
         }
 
-        auto game_result = env_player.GameResult();
-        assert(game_result != lczero::GameResult::UNDECIDED);
-        float score =
-            game_result == lczero::GameResult::DRAW ? 0
-            : is_first_black == (game_result == lczero::GameResult::BLACK_WON) ? 1
-            : -1;
-        for (int ri = start_rows_index; ri < rows.size(); ri++) {
-            rows[ri].second = score;
-            score = -score;
+        else {
+            vector<PositionHistoryTree*> trees;
+            vector<int> nodes;
+            for (int ei = 0; ei < envs.size(); ei++) {
+                trees.push_back(&envs[ei]->Tree());
+                nodes.push_back(envs[ei]->Tree().LastIndex());
+            }
+            auto encoded_batch = GetQModelEstimation(trees, nodes, q_model, device);
+
+            auto best_moves = encoded_batch->FindBestMoves();
+
+            for (int ei = envs.size() - 1; ei >= 0; ei--) {
+
+                if (rand() % 1000000 > dataset_drop_ratio * 1000000) {
+                    rows.push_back({encoded_batch->tensor[ei], 0});   // TODO: check if copy needed
+                    row_game_indices.push_back(game_indices[ei]);
+                }
+
+                auto game_result = envs[ei]->GameResult();
+
+                if (game_result == lczero::GameResult::UNDECIDED) {
+                    auto move = best_moves[ei];
+                    envs[ei]->Move(move);
+                }
+                else {
+                    bool is_first_black = envs[ei]->Tree().positions[0].IsBlackToMove();
+                    float score =
+                        game_result == lczero::GameResult::DRAW ? 0
+                        : is_first_black == (game_result == lczero::GameResult::BLACK_WON) ? 1
+                        : -1;
+                    game_scores[game_indices[ei]] = score;
+
+                    if (ei < envs.size() - 1) {
+                        swap(envs[ei], envs[envs.size() - 1]);
+                        swap(game_indices[ei], game_indices[game_indices.size() - 1]);
+                    }
+                    envs.pop_back();
+                    game_indices.pop_back();
+                }
+            }
         }
     }
+
+    for (int ri = 0; ri < rows.size(); ri++)
+        rows[ri].second = game_scores[row_game_indices[ri]];
+
+
+    // for (int gi = 0; gi < n_games; gi++) {
+    //     int start_rows_index = rows.size();
+    //     EnvPlayer env_player(starting_fen, n_max_episode_steps);
+
+    //     bool is_first_black = env_player.LastPosition().IsBlackToMove();
+
+    //     while (true) {
+    //         vector<PositionHistoryTree*> trees = {&env_player.Tree()};
+    //         auto encoded_batch = GetQModelEstimation(trees, {env_player.Tree().LastIndex()}, q_model, device);
+
+    //         if (rand() % 1000000 > dataset_drop_ratio * 1000000)
+    //             rows.push_back({encoded_batch->tensor, 0});
+
+    //         if (env_player.GameResult() != lczero::GameResult::UNDECIDED)
+    //             break;
+
+    //         auto move = encoded_batch->FindBestMoves()[0];
+    //         env_player.Move(move);
+    //     }
+
+    //     auto game_result = env_player.GameResult();
+    //     assert(game_result != lczero::GameResult::UNDECIDED);
+    //     float score =
+    //         game_result == lczero::GameResult::DRAW ? 0
+    //         : is_first_black == (game_result == lczero::GameResult::BLACK_WON) ? 1
+    //         : -1;
+    //     for (int ri = start_rows_index; ri < rows.size(); ri++) {
+    //         rows[ri].second = score;
+    //         score = -score;
+    //     }
+    // }
 
     return rows;
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <memory>
 #include <utility>
 #include <ATen/Device.h>
 #include <torch/torch.h>
@@ -15,7 +16,7 @@
 
 namespace probs {
 
-std::vector<std::pair<torch::Tensor, float>> SelfPlay(ResNet q_model, const ConfigParser& config_parser, const int n_games);
+std::vector<std::pair<torch::Tensor, float>> SelfPlay(ResNet q_model, const ConfigParser& config_parser, const int n_games, at::Device& device);
 
 void TrainV(const ConfigParser& config_parser, ResNet v_model, torch::optim::AdamW& v_optimizer, std::vector<std::pair<torch::Tensor, float>>& v_dataset);
 

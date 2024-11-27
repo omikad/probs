@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <torch/torch.h>
+#include <ATen/Device.h>
 
 #include "infra/config_parser.h"
 #include "neural/encoder.h"
@@ -47,6 +48,7 @@ class ProbsImpl {
         void SelfPlayAndTrainV(const int v_train_episodes, const double dataset_drop_ratio);
         const ConfigParser& config_parser;
         ModelKeeper model_keeper;
+        at::Device device;
 
     private:
         std::vector<SafeQueue<std::shared_ptr<QueueItem>>> taskQueues;

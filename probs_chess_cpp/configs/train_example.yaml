@@ -28,7 +28,7 @@ training:
   # resume from checkpoint:
   checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241127-181135*'
 infra:
-  gpu: -1                               # gpu id, use -1 for cpu
-  n_threads: 4
+  gpu: 0                               # gpu id, use -1 for cpu
+  n_threads: 3
   # evaluate_n_games: 100
   # log: 'mem'                            # write learning curves to 'tf' or 'mem'

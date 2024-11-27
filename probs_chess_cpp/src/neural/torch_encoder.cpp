@@ -63,8 +63,8 @@ shared_ptr<EncodedPositionBatch> GetQModelEstimation(
         }
     }
 
-    result.tensor.to(device);
-    torch::Tensor q_values = q_model->forward(result.tensor);
+    auto inp = result.tensor.to(device);
+    torch::Tensor q_values = q_model->forward(inp);
 
     result.moves_estimation.resize(batch_size);
 
