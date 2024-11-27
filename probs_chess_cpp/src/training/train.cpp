@@ -1,3 +1,5 @@
+#include <time.h>
+
 #include "training/train.h"
 
 using namespace std;
@@ -6,7 +8,10 @@ using namespace std;
 namespace probs {
 
 
-void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQueue<shared_ptr<QueueItem>>& resultsQueue) {
+void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQueue<shared_ptr<QueueItem>>& resultsQueue, int worker_idx) {
+    srand(time(NULL) + worker_idx);
+    // torch::set_num_threads(1);   // seems like this here don't improve things
+
     auto thread_id = this_thread::get_id();
     cout << "[Worker " << thread_id << "] started." << endl;
 
@@ -37,8 +42,8 @@ ProbsImpl::ProbsImpl(const ConfigParser& config_parser)
     taskQueues = vector<SafeQueue<shared_ptr<QueueItem>>>(n_threads);
     resultQueues = vector<SafeQueue<shared_ptr<QueueItem>>>(n_threads);
 
-    for (int ti = 0; ti < n_threads; ti++)
-        workers.push_back(thread(worker, ref(*this), ref(taskQueues[ti]), ref(resultQueues[ti])));
+    for (int wi = 0; wi < n_threads; wi++)
+        workers.push_back(thread(worker, ref(*this), ref(taskQueues[wi]), ref(resultQueues[wi]), wi));
 }
 
 
@@ -67,7 +72,7 @@ void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes, const double datas
         }
     }
 
-    TrainV(config_parser, model_keeper.v_model, model_keeper.v_optimizer, v_dataset);
+    // TrainV(config_parser, model_keeper.v_model, model_keeper.v_optimizer, v_dataset);
 }
 
 
@@ -79,6 +84,8 @@ void ProbsImpl::GoTrain() {
     cout << "  n_high_level_iterations = " << n_high_level_iterations << endl;
     cout << "  v_train_episodes = " << v_train_episodes << endl;
     cout << "  dataset_drop_ratio = " << dataset_drop_ratio << endl;
+
+    torch::set_num_threads(1);
 
     for (int high_level_i = 0; high_level_i < n_high_level_iterations; high_level_i++) {
         SelfPlayAndTrainV(v_train_episodes, dataset_drop_ratio);

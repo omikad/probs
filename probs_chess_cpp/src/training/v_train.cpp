@@ -6,6 +6,8 @@ using namespace std;
 namespace probs {
 
 vector<pair<torch::Tensor, float>> SelfPlay(ResNet q_model, const ConfigParser& config_parser, const int n_games) {
+    torch::NoGradGuard no_grad;
+
     vector<pair<torch::Tensor, float>> rows;
 
     // TODO: check if tensor being copied
