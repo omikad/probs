@@ -23,7 +23,7 @@ void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQu
 
             if (auto command_self_play = dynamic_pointer_cast<QueueCommand_SelfPlay>(command)) {
                 // cout << "[Worker " << thread_id << "] Got command self play " << command_self_play->n_games << " games. Device = " << impl.device << endl;
-                auto rows = SelfPlay(impl.model_keeper.q_model, impl.config_parser, command_self_play->n_games, impl.device);
+                auto rows = SelfPlay(impl.model_keeper.q_model, impl.device, impl.config_parser, command_self_play->n_games);
                 resultsQueue.enqueue(make_shared<QueueResponse_SelfPlay>(rows));
             } else {
                 cout << "[Worker " << thread_id << "] Unknown command type!" << endl;
@@ -62,7 +62,7 @@ void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes, const double datas
             taskQueues[wi].enqueue(make_shared<QueueCommand_SelfPlay>(curr_games));
     }
 
-    vector<pair<torch::Tensor, float>> v_dataset;
+    vector<pair<lczero::InputPlanes, float>> v_dataset;
 
     for (int wi = 0; wi < wcnt; wi++) {
         auto response = resultQueues[wi].dequeue();
@@ -74,7 +74,7 @@ void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes, const double datas
         }
     }
 
-    // TrainV(config_parser, model_keeper.v_model, model_keeper.v_optimizer, v_dataset);
+    TrainV(config_parser, model_keeper.v_model, device, model_keeper.v_optimizer, v_dataset);
 }
 
 

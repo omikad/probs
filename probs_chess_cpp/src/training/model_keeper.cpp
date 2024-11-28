@@ -54,10 +54,14 @@ void ModelKeeper::SaveCheckpoint() {
     std::ostringstream os;
     os << std::put_time(&tm, "%Y%m%d-%H%M%S");
 
-    torch::save(v_model, checkpoints_dir + "/ckpt_" + os.str() + "_v.ckpt");
-    torch::save(q_model, checkpoints_dir + "/ckpt_" + os.str() + "_q.ckpt");
-    torch::save(v_optimizer, checkpoints_dir + "/ckpt_" + os.str() + "_vo.ckpt");
-    torch::save(q_optimizer, checkpoints_dir + "/ckpt_" + os.str() + "_qo.ckpt");
+    string path_base = checkpoints_dir + "/ckpt_" + os.str();
+
+    torch::save(v_model, path_base + "_v.ckpt");
+    torch::save(q_model, path_base + "_q.ckpt");
+    torch::save(v_optimizer, path_base + "_vo.ckpt");
+    torch::save(q_optimizer, path_base + "_qo.ckpt");
+
+    cout << "[TRAIN] Checkpoint saved to " << path_base << "*" << endl;
 }
 
 

@@ -5,10 +5,9 @@ using namespace std;
 
 namespace probs {
 
-vector<pair<torch::Tensor, float>> SelfPlay(ResNet q_model, const ConfigParser& config_parser, const int n_games, at::Device& device) {
+vector<pair<lczero::InputPlanes, float>> SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config_parser, const int n_games) {
     torch::NoGradGuard no_grad;
-
-    // TODO: check if tensor being copied
+    q_model->eval();
 
     int batch_size = config_parser.GetInt("training.batch_size");
     int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps");
@@ -17,17 +16,16 @@ vector<pair<torch::Tensor, float>> SelfPlay(ResNet q_model, const ConfigParser& 
     int game_idx = 0;
     vector<float> game_scores(n_games, 0);
 
-    vector<pair<torch::Tensor, float>> rows;
-    vector<int> row_game_indices;
+    vector<pair<lczero::InputPlanes, float>> rows;
 
     vector<shared_ptr<EnvPlayer>> envs;
-    vector<int> game_indices;
+    vector<vector<int>> env_rows;
 
     while (game_idx < n_games || envs.size() > 0) {
 
         if (envs.size() < batch_size && game_idx < n_games) {
             envs.push_back(make_shared<EnvPlayer>(EnvPlayer(lczero::ChessBoard::kStartposFen, n_max_episode_steps)));
-            game_indices.push_back(game_idx);
+            env_rows.push_back({});
             game_idx++;
         }
 
@@ -40,81 +38,51 @@ vector<pair<torch::Tensor, float>> SelfPlay(ResNet q_model, const ConfigParser& 
             }
             auto encoded_batch = GetQModelEstimation(trees, nodes, q_model, device);
 
-            auto best_moves = encoded_batch->FindBestMoves();
-
             for (int ei = envs.size() - 1; ei >= 0; ei--) {
 
                 if (rand() % 1000000 > dataset_drop_ratio * 1000000) {
-                    rows.push_back({encoded_batch->tensor[ei], 0});   // TODO: check if copy needed
-                    row_game_indices.push_back(game_indices[ei]);
+                    float is_row_black = envs[ei]->Tree().Last().IsBlackToMove() ? 1 : -1;
+                    rows.push_back({encoded_batch->planes[ei], is_row_black});
+                    env_rows[ei].push_back(rows.size());
                 }
 
                 auto game_result = envs[ei]->GameResult();
 
                 if (game_result == lczero::GameResult::UNDECIDED) {
-                    auto move = best_moves[ei];
+                    auto move = encoded_batch->FindBestMove(ei);
                     envs[ei]->Move(move);
                 }
                 else {
                     bool is_first_black = envs[ei]->Tree().positions[0].IsBlackToMove();
-                    float score =
+                    float first_player_score =
                         game_result == lczero::GameResult::DRAW ? 0
                         : is_first_black == (game_result == lczero::GameResult::BLACK_WON) ? 1
                         : -1;
-                    game_scores[game_indices[ei]] = score;
+
+                    for (int row_idx : env_rows[ei]) {
+                        float is_row_black = rows[row_idx].second;
+                        float score = (is_first_black ? 1 : -1) * is_row_black * first_player_score;
+                        rows[row_idx].second = score;
+                    }
 
                     if (ei < envs.size() - 1) {
                         swap(envs[ei], envs[envs.size() - 1]);
-                        swap(game_indices[ei], game_indices[game_indices.size() - 1]);
+                        swap(env_rows[ei], env_rows[env_rows.size() - 1]);
                     }
                     envs.pop_back();
-                    game_indices.pop_back();
+                    env_rows.pop_back();
                 }
             }
         }
     }
 
-    for (int ri = 0; ri < rows.size(); ri++)
-        rows[ri].second = game_scores[row_game_indices[ri]];
-
-
-    // for (int gi = 0; gi < n_games; gi++) {
-    //     int start_rows_index = rows.size();
-    //     EnvPlayer env_player(starting_fen, n_max_episode_steps);
-
-    //     bool is_first_black = env_player.LastPosition().IsBlackToMove();
-
-    //     while (true) {
-    //         vector<PositionHistoryTree*> trees = {&env_player.Tree()};
-    //         auto encoded_batch = GetQModelEstimation(trees, {env_player.Tree().LastIndex()}, q_model, device);
-
-    //         if (rand() % 1000000 > dataset_drop_ratio * 1000000)
-    //             rows.push_back({encoded_batch->tensor, 0});
-
-    //         if (env_player.GameResult() != lczero::GameResult::UNDECIDED)
-    //             break;
-
-    //         auto move = encoded_batch->FindBestMoves()[0];
-    //         env_player.Move(move);
-    //     }
-
-    //     auto game_result = env_player.GameResult();
-    //     assert(game_result != lczero::GameResult::UNDECIDED);
-    //     float score =
-    //         game_result == lczero::GameResult::DRAW ? 0
-    //         : is_first_black == (game_result == lczero::GameResult::BLACK_WON) ? 1
-    //         : -1;
-    //     for (int ri = start_rows_index; ri < rows.size(); ri++) {
-    //         rows[ri].second = score;
-    //         score = -score;
-    //     }
-    // }
-
     return rows;
 }
 
 
-void TrainV(const ConfigParser& config_parser, ResNet v_model, torch::optim::AdamW& v_optimizer, vector<pair<torch::Tensor, float>>& v_dataset) {
+void TrainV(const ConfigParser& config_parser, ResNet v_model, at::Device& device, torch::optim::AdamW& v_optimizer, vector<pair<lczero::InputPlanes, float>>& v_dataset) {
+    v_model->train();
+
     int dataset_size = v_dataset.size();
     cout << "[Train.V] Train V model on dataset with " << dataset_size << " rows" << endl;
 
@@ -125,14 +93,25 @@ void TrainV(const ConfigParser& config_parser, ResNet v_model, torch::optim::Ada
     for (int i = 0; i < dataset_size; i++) swap(indices[i], indices[i + rand() % (dataset_size - i)]);
 
     for (int end = batch_size; end <= dataset_size; end += batch_size) {
-        vector<torch::Tensor> input_arr;
-        torch::Tensor target = torch::zeros({batch_size, 1});
 
-        for (int i = end - batch_size; i < end; i++) {
-            input_arr.push_back(v_dataset[indices[i]].first);
-            target[i - end + batch_size, 0] = v_dataset[indices[i]].second;
+        torch::Tensor target = torch::zeros({batch_size, 1});
+        torch::Tensor input = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
+
+        for (int ri = end - batch_size; ri < end; ri++) {
+            int bi = ri - end + batch_size;
+
+            target[bi][0] = v_dataset[ri].second;
+
+            for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
+                const lczero::InputPlane& plane = v_dataset[ri].first[pi];
+                for (auto bit : lczero::IterateBits(plane.mask)) {
+                    input[bi][pi][bit / 8][bit % 8] = plane.value;
+                }
+            }
         }
-        torch::Tensor input = torch::cat(input_arr);
+
+        input = input.to(device);
+        target = target.to(device);
 
         v_optimizer.zero_grad();
 
@@ -140,7 +119,7 @@ void TrainV(const ConfigParser& config_parser, ResNet v_model, torch::optim::Ada
 
         torch::Tensor prediction = v_model->forward(input);
 
-        // cout << "Prediction: " << DebugString(prediction) << endl;
+        // cout << "Prediction: " << DebugString(prediction.to(torch::kCPU)) << endl;
 
         torch::Tensor loss = torch::mse_loss(prediction, target);
 

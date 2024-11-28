@@ -16,8 +16,8 @@
 
 namespace probs {
 
-std::vector<std::pair<torch::Tensor, float>> SelfPlay(ResNet q_model, const ConfigParser& config_parser, const int n_games, at::Device& device);
+std::vector<std::pair<lczero::InputPlanes, float>> SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config_parser, const int n_games);
 
-void TrainV(const ConfigParser& config_parser, ResNet v_model, torch::optim::AdamW& v_optimizer, std::vector<std::pair<torch::Tensor, float>>& v_dataset);
+void TrainV(const ConfigParser& config_parser, ResNet v_model, at::Device& device, torch::optim::AdamW& v_optimizer, std::vector<std::pair<lczero::InputPlanes, float>>& v_dataset);
 
 }  // namespace probs

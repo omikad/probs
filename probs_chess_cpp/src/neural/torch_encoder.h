@@ -21,7 +21,8 @@ struct EncodedPositionBatch {
     torch::Tensor tensor;
     std::vector<std::vector<std::pair<lczero::Move, float>>> moves_estimation;
 
-    std::vector<lczero::Move> const FindBestMoves();
+    lczero::Move FindBestMove(const int bi) const;
+    std::vector<lczero::Move> const FindBestMoves() const;
 };
 
 

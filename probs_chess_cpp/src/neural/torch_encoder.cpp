@@ -6,24 +6,25 @@ using namespace std;
 namespace probs {
 
 
-vector<lczero::Move> const EncodedPositionBatch::FindBestMoves() {
-    vector<lczero::Move> result(transforms.size());
+lczero::Move EncodedPositionBatch::FindBestMove(const int bi) const {
+    float best_score = -1000000;
+    lczero::Move best_move;
 
-    for (int bi = 0; bi < transforms.size(); bi++) {
-        float best_score = -1000000;
-        lczero::Move best_move;
-
-        for (auto& move_and_score : moves_estimation[bi]) {
-            float score = move_and_score.second;
-            if (score > best_score) {
-                best_score = score;
-                best_move = move_and_score.first;
-            }
+    for (auto& move_and_score : moves_estimation[bi]) {
+        float score = move_and_score.second;
+        if (score > best_score) {
+            best_score = score;
+            best_move = move_and_score.first;
         }
-
-        result[bi] = best_move;
     }
+    return best_move;
+}
 
+
+vector<lczero::Move> const EncodedPositionBatch::FindBestMoves() const {
+    vector<lczero::Move> result(transforms.size());
+    for (int bi = 0; bi < transforms.size(); bi++)
+        result[bi] = FindBestMove(bi);
     return result;
 }
 
