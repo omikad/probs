@@ -48,7 +48,7 @@ shared_ptr<EncodedPositionBatch> GetQModelEstimation(
     int batch_size = nodes.size();
 
     EncodedPositionBatch result;
-    result.tensor = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
+    torch::Tensor input = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
 
     for (int bi = 0; bi < batch_size; bi++) {
         lczero::PositionHistory lchistory = trees[bi]->ToLczeroHistory(nodes[bi]);
@@ -62,13 +62,14 @@ shared_ptr<EncodedPositionBatch> GetQModelEstimation(
         for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
             const auto& plane = result.planes.back()[pi];
             for (auto bit : lczero::IterateBits(plane.mask)) {
-                result.tensor[bi][pi][bit / 8][bit % 8] = plane.value;
+                input[bi][pi][bit / 8][bit % 8] = plane.value;
             }
         }
     }
 
-    auto inp = result.tensor.to(device);
-    torch::Tensor q_values = q_model->forward(inp);
+    input = input.to(device);
+    torch::Tensor q_values = q_model->forward(input);
+    q_values = q_values.to(torch::kCPU);
 
     result.moves_estimation.resize(batch_size);
 

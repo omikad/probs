@@ -37,9 +37,6 @@ class PositionHistoryTree {
         /// @brief node -> board hash
         std::vector<uint64_t> hashes;
 
-        /// @brief rnode -> list of kids
-        std::vector<std::vector<int>> kids;
-
         /// @brief node -> parent node (or -1 for root)
         std::vector<int> parents;
 

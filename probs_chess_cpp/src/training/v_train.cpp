@@ -89,10 +89,10 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
 
             for (int ei = envs.size() - 1; ei >= 0; ei--) {
 
-                if (rand() % 1000000 > dataset_drop_ratio * 1000000) {
+                if (rand() % 1000000 >= dataset_drop_ratio * 1000000) {
                     float is_row_black = envs[ei]->Tree().Last().IsBlackToMove() ? 1 : -1;
-                    rows.push_back({encoded_batch->planes[ei], is_row_black});
                     env_rows[ei].push_back(rows.size());
+                    rows.push_back({encoded_batch->planes[ei], is_row_black});
                 }
 
                 auto game_result = envs[ei]->GameResult();
@@ -102,22 +102,29 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
                     envs[ei]->Move(move);
                 }
                 else {
-                    bool is_first_black = envs[ei]->Tree().positions[0].IsBlackToMove();
-                    float first_player_score =
+                    float black_score =
                         game_result == lczero::GameResult::DRAW ? 0
-                        : is_first_black == (game_result == lczero::GameResult::BLACK_WON) ? 1
+                        : game_result == lczero::GameResult::BLACK_WON ? 1
                         : -1;
 
                     for (int row_idx : env_rows[ei]) {
                         float is_row_black = rows[row_idx].second;
-                        float score = (is_first_black ? 1 : -1) * is_row_black * first_player_score;
-                        rows[row_idx].second = score;
+                        rows[row_idx].second = is_row_black * black_score;
                     }
+
+                    // cout << "env outcome=" << (int)game_result << endl;
+                    // cout << "env rows.size()=" << env_rows[ei].size() << endl;
+                    // cout << "env size=" << envs[ei]->Tree().positions.size() << endl;
+                    // cout << "env rows scores:";
+                    // for (int ri : env_rows[ei])
+                    //     cout << " " << rows[ri].second;
+                    // cout << endl;
 
                     if (ei < envs.size() - 1) {
                         swap(envs[ei], envs[envs.size() - 1]);
                         swap(env_rows[ei], env_rows[env_rows.size() - 1]);
                     }
+
                     envs.pop_back();
                     env_rows.pop_back();
                 }
@@ -152,17 +159,17 @@ void TrainV(const ConfigParser& config_parser, ResNet v_model, at::Device& devic
     for (int i = 0; i < dataset_size; i++) swap(indices[i], indices[i + rand() % (dataset_size - i)]);
 
     for (int end = batch_size; end <= dataset_size; end += batch_size) {
-
         torch::Tensor target = torch::zeros({batch_size, 1});
         torch::Tensor input = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
 
         for (int ri = end - batch_size; ri < end; ri++) {
             int bi = ri - end + batch_size;
+            int row_i = indices[ri];
 
-            target[bi][0] = v_dataset[ri].second;
+            target[bi][0] = v_dataset[row_i].second;
 
             for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
-                const lczero::InputPlane& plane = v_dataset[ri].first[pi];
+                const lczero::InputPlane& plane = v_dataset[row_i].first[pi];
                 for (auto bit : lczero::IterateBits(plane.mask)) {
                     input[bi][pi][bit / 8][bit % 8] = plane.value;
                 }

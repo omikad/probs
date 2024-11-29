@@ -116,27 +116,34 @@ vector<lczero::Move> VResnetPlayer::GetActions(vector<PositionHistoryTree*>& his
         vector<lczero::Move> moves;
         vector<lczero::InputPlanes> input_planes;
 
+        int last_node_idx = history[bi]->LastIndex();
+
         for (auto move: history[bi]->Last().GetBoard().GenerateLegalMoves()) {
             moves.push_back(move);
+
+            int new_node = history[bi]->Append(last_node_idx, move);
+
             int transform_out;
-            input_planes.push_back(Encode(history[bi]->ToLczeroHistory(history[bi]->LastIndex()), &transform_out));
+            input_planes.push_back(Encode(history[bi]->ToLczeroHistory(new_node), &transform_out));
+
+            history[bi]->PopLast();
         }
         assert(moves.size() > 0);
+        assert(history[bi]->LastIndex() == last_node_idx);
 
         torch::Tensor input = torch::zeros({(int)moves.size(), lczero::kInputPlanes, 8, 8});
         for (int mi = 0; mi < moves.size(); mi++)
-        for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
-            const auto& plane = input_planes.back()[pi];
-            for (auto bit : lczero::IterateBits(plane.mask)) {
-                input[mi][pi][bit / 8][bit % 8] = plane.value;
+            for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
+                const auto& plane = input_planes[mi][pi];
+                for (auto bit : lczero::IterateBits(plane.mask)) {
+                    input[mi][pi][bit / 8][bit % 8] = plane.value;
+                }
             }
-        }
 
         input = input.to(device);
 
         torch::Tensor predictions = v_model->forward(input);
         predictions = predictions.contiguous();
-
         vector<float> values(predictions.data_ptr<float>(), predictions.data_ptr<float>() + predictions.numel());
         assert(values.size() == moves.size());
 

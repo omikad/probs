@@ -16,7 +16,6 @@ PositionHistoryTree::PositionHistoryTree(const string& starting_fen) {
 
     positions.push_back(root_position);
     hashes.push_back(starting_board.Hash());
-    kids.push_back({});
     parents.push_back(-1);
 }
 
@@ -27,11 +26,7 @@ PositionHistoryTree::PositionHistoryTree(const lczero::PositionHistory& lchistor
 
         positions.push_back(position);
         hashes.push_back(position.GetBoard().Hash());
-        kids.push_back({});
         parents.push_back(pi - 1);
-
-        if (pi > 0)
-            kids[pi - 1].push_back(pi);
     }
 }
 
@@ -51,6 +46,7 @@ lczero::PositionHistory PositionHistoryTree::ToLczeroHistory(const int node) con
 lczero::GameResult PositionHistoryTree::ComputeGameResult(const int node) const {
     auto& position = positions[node];
     const auto& board = position.GetBoard();
+
     auto legal_moves = board.GenerateLegalMoves();
     if (legal_moves.empty()) {
         if (board.IsUnderCheck()) {
@@ -63,6 +59,18 @@ lczero::GameResult PositionHistoryTree::ComputeGameResult(const int node) const 
     if (position.GetRule50Ply() >= 100) return lczero::GameResult::DRAW;
     if (position.GetRepetitions() >= 2) return lczero::GameResult::DRAW;
 
+    // Make game simpler to test NN training:
+    // if (position.GetGamePly() >= 200) {
+    //     int ours = board.ours().count();
+    //     int theirs = board.theirs().count();
+
+    //     if (ours == theirs) return lczero::GameResult::UNDECIDED;
+    //     if (position.IsBlackToMove())
+    //         return ours > theirs ? lczero::GameResult::BLACK_WON : lczero::GameResult::WHITE_WON;
+    //     else
+    //         return ours > theirs ? lczero::GameResult::WHITE_WON : lczero::GameResult::BLACK_WON;
+    // }
+
     return lczero::GameResult::UNDECIDED;
 };
 
@@ -72,10 +80,7 @@ int PositionHistoryTree::Append(const int node, lczero::Move move) {
 
     positions.push_back(lczero::Position(positions[node], move));
     hashes.push_back(positions.back().GetBoard().Hash());
-    kids.push_back({});
     parents.push_back(node);
-
-    kids[node].push_back(new_node);
 
     int cycle_length;
     int repetitions = ComputeLastMoveRepetitions(new_node, &cycle_length);
@@ -91,13 +96,7 @@ void PositionHistoryTree::PopLast() {
 
     positions.pop_back();
     hashes.pop_back();
-    kids.pop_back();
     parents.pop_back();
-
-    if (parent >= 0) {
-        auto& par_kids = kids[parent];
-        par_kids.erase(remove(par_kids.begin(), par_kids.end(), removed), par_kids.end());
-    }
 }
 
 

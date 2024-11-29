@@ -18,7 +18,6 @@ namespace probs {
 struct EncodedPositionBatch {
     std::vector<int> transforms;
     std::vector<lczero::InputPlanes> planes;
-    torch::Tensor tensor;
     std::vector<std::vector<std::pair<lczero::Move, float>>> moves_estimation;
 
     lczero::Move FindBestMove(const int bi) const;
