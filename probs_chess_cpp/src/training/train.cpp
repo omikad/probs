@@ -14,7 +14,7 @@ void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQu
     // torch::set_num_threads(1);   // seems like this here don't improve things
 
     auto thread_id = this_thread::get_id();
-    cout << "[Worker " << thread_id << "] started." << endl;
+    cout << "[WORKER " << thread_id << "] started." << endl;
 
     try {
         while (true) {
@@ -22,14 +22,14 @@ void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQu
             if (!command) break; // Exit signal
 
             if (auto command_self_play = dynamic_pointer_cast<QueueCommand_SelfPlay>(command)) {
-                // cout << "[Worker " << thread_id << "] Got command self play " << command_self_play->n_games << " games. Device = " << impl.device << endl;
+                // cout << "[WORKER " << thread_id << "] Got command self play " << command_self_play->n_games << " games. Device = " << impl.device << endl;
                 auto rows = SelfPlay(impl.model_keeper.q_model, impl.device, impl.config_parser, command_self_play->n_games);
                 resultsQueue.enqueue(make_shared<QueueResponse_SelfPlay>(rows));
             } else {
-                cout << "[Worker " << thread_id << "] Unknown command type!" << endl;
+                cout << "[WORKER " << thread_id << "] Unknown command type!" << endl;
             }
         }
-        cout << "[Worker " << thread_id << "] stopped." << endl;
+        cout << "[WORKER " << thread_id << "] stopped." << endl;
     } catch (const exception& e) {
         cerr << "Error: " << e.what() << "\n";
     }
@@ -101,9 +101,9 @@ void ProbsImpl::GoTrain() {
     }
 
     for (int high_level_i = 0; high_level_i < n_high_level_iterations; high_level_i++) {
-        model_keeper.q_model->eval();
         SelfPlayAndTrainV(v_train_episodes, dataset_drop_ratio);
 
+        model_keeper.SetEvalMode();
         model_keeper.SaveCheckpoint();
     }
 

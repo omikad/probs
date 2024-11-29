@@ -7,6 +7,8 @@ namespace probs {
 
 
 void Battle::GoBattle(const ConfigParser& config_parser) {
+    torch::NoGradGuard no_grad;
+
     IPlayer* player1;
     IPlayer* player2;
 
@@ -14,16 +16,23 @@ void Battle::GoBattle(const ConfigParser& config_parser) {
         string kind = config_parser.GetString("player" + to_string(pi) + ".kind");
         if (kind == "random")
             (pi == 1 ? player1 : player2) = new RandomPlayer("RandomPlayer" + to_string(pi));
-        else if (kind == "vq_resnet_player")
-            (pi == 1 ? player1 : player2) = new VQResnetPlayer(config_parser, "player" + to_string(pi), "VQResnetPlayer" + to_string(pi));
         else if (kind == "one_step_lookahead")
             (pi == 1 ? player1 : player2) = new NStepLookaheadPlayer("NStepLookaheadPlayer" + to_string(pi), 1);
         else if (kind == "two_step_lookahead")
             (pi == 1 ? player1 : player2) = new NStepLookaheadPlayer("NStepLookaheadPlayer" + to_string(pi), 2);
         else if (kind == "three_step_lookahead")
             (pi == 1 ? player1 : player2) = new NStepLookaheadPlayer("NStepLookaheadPlayer" + to_string(pi), 3);
-        else
-            throw Exception("Unknown player1.kind attribute value");
+        else if (kind == "v_resnet_player" || kind == "q_resnet_player") {
+            ModelKeeper model_keeper(config_parser, "player" + to_string(pi) + ".model");
+            if (kind == "v_resnet_player")
+                (pi == 1 ? player1 : player2) = new VResnetPlayer(model_keeper, config_parser, "player" + to_string(pi), "VResnetPlayer" + to_string(pi));
+            else if (kind == "q_resnet_player")
+                (pi == 1 ? player1 : player2) = new QResnetPlayer(model_keeper, config_parser, "player" + to_string(pi), "QResnetPlayer" + to_string(pi));
+            model_keeper.SetEvalMode();
+        }
+        else {
+            throw Exception("Unknown player.kind attribute value");
+        }
     }
 
     int evaluate_n_games = config_parser.GetInt("infra.evaluate_n_games");

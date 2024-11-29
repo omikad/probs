@@ -16,6 +16,8 @@
 
 namespace probs {
 
+lczero::Move GetMoveWithExploration(std::shared_ptr<EncodedPositionBatch> encoded_batch, int batch_item_idx, int env_ply, bool exploration_full_random, int exploration_num_first_moves);
+
 std::vector<std::pair<lczero::InputPlanes, float>> SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config_parser, const int n_games);
 
 void TrainV(const ConfigParser& config_parser, ResNet v_model, at::Device& device, torch::optim::AdamW& v_optimizer, std::vector<std::pair<lczero::InputPlanes, float>>& v_dataset);

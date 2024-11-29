@@ -26,10 +26,13 @@ struct EncodedPositionBatch {
 };
 
 
+lczero::InputPlanes Encode(const lczero::PositionHistory& lchistory, int* transform_out);
+
+
 std::shared_ptr<EncodedPositionBatch> GetQModelEstimation(
     const std::vector<PositionHistoryTree*>& trees,
     const std::vector<int>& nodes,
     ResNet q_model,
-    at::Device& device);
+    const at::Device& device);
 
 }  // namespace probs

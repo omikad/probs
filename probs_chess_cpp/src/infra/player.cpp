@@ -32,7 +32,7 @@ vector<lczero::Move> NStepLookaheadPlayer::GetActions(vector<PositionHistoryTree
 
         bool is_black = tree.positions[node].IsBlackToMove();
 
-        for (auto& move : tree.positions[node].GetBoard().GenerateLegalMoves()) {
+        for (auto move : tree.positions[node].GetBoard().GenerateLegalMoves()) {
 
             int kid_node = tree.Append(node, move);
 
@@ -90,29 +90,89 @@ vector<lczero::Move> NStepLookaheadPlayer::GetActions(vector<PositionHistoryTree
 }
 
 
-VQResnetPlayer::VQResnetPlayer(const ConfigParser& config_parser, const string& config_key_prefix, const string& name):
+VResnetPlayer::VResnetPlayer(ModelKeeper& model_keeper, const ConfigParser& config_parser, const string& config_key_prefix, const string& name):
         name(name),
         device(torch::kCPU),
-        v_model(config_parser, config_key_prefix + ".model.v", true),
-        q_model(config_parser, config_key_prefix + ".model.q", false) {
+        v_model(config_parser, config_key_prefix + ".model.v", true) {
 
     int gpu_num = config_parser.GetInt("infra.gpu");
-    cout << "VQResnetPlayer GPU: " << gpu_num << endl;
+    cout << "VResnetPlayer GPU: " << gpu_num << endl;
     if (gpu_num >= 0) {
         if (torch::cuda::is_available())
             device = at::Device("cuda:" + to_string(gpu_num));
         else
             throw Exception("Config points to GPU which is not available (config parameter infra.gpu)");
         v_model->to(device);
-        q_model->to(device);
     }
 
     cout << DebugString(*v_model) << endl;
+}
+
+
+vector<lczero::Move> VResnetPlayer::GetActions(vector<PositionHistoryTree*>& history) {
+    vector<lczero::Move> picked_moves;
+
+    for (int bi = 0; bi < history.size(); bi++) {
+        vector<lczero::Move> moves;
+        vector<lczero::InputPlanes> input_planes;
+
+        for (auto move: history[bi]->Last().GetBoard().GenerateLegalMoves()) {
+            moves.push_back(move);
+            int transform_out;
+            input_planes.push_back(Encode(history[bi]->ToLczeroHistory(history[bi]->LastIndex()), &transform_out));
+        }
+        assert(moves.size() > 0);
+
+        torch::Tensor input = torch::zeros({(int)moves.size(), lczero::kInputPlanes, 8, 8});
+        for (int mi = 0; mi < moves.size(); mi++)
+        for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
+            const auto& plane = input_planes.back()[pi];
+            for (auto bit : lczero::IterateBits(plane.mask)) {
+                input[mi][pi][bit / 8][bit % 8] = plane.value;
+            }
+        }
+
+        input = input.to(device);
+
+        torch::Tensor predictions = v_model->forward(input);
+        predictions = predictions.contiguous();
+
+        vector<float> values(predictions.data_ptr<float>(), predictions.data_ptr<float>() + predictions.numel());
+        assert(values.size() == moves.size());
+
+        // My best move leads to the lowest evaluation of the next state for the next player
+        int best_i = 0;
+        for (int i = 1; i < values.size(); i++)
+            if (values[i] < values[best_i])
+                best_i = i;
+        
+        picked_moves.push_back(moves[best_i]);
+    }
+
+    return picked_moves;
+}
+
+
+QResnetPlayer::QResnetPlayer(ModelKeeper& model_keeper, const ConfigParser& config_parser, const string& config_key_prefix, const string& name):
+        name(name),
+        device(torch::kCPU),
+        q_model(config_parser, config_key_prefix + ".model.q", false) {
+
+    int gpu_num = config_parser.GetInt("infra.gpu");
+    cout << "QResnetPlayer GPU: " << gpu_num << endl;
+    if (gpu_num >= 0) {
+        if (torch::cuda::is_available())
+            device = at::Device("cuda:" + to_string(gpu_num));
+        else
+            throw Exception("Config points to GPU which is not available (config parameter infra.gpu)");
+        q_model->to(device);
+    }
+
     cout << DebugString(*q_model) << endl;
 }
 
 
-vector<lczero::Move> VQResnetPlayer::GetActions(vector<PositionHistoryTree*>& history) {
+vector<lczero::Move> QResnetPlayer::GetActions(vector<PositionHistoryTree*>& history) {
     int batch_size = history.size();
 
     vector<int> nodes(batch_size);

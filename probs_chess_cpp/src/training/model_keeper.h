@@ -12,7 +12,12 @@ namespace probs {
 
 class ModelKeeper {
     public:
+        /// @brief Constructor to load models for evaluation
+        ModelKeeper(const ConfigParser& config_parser, const std::string& model_key);
+
+        /// @brief Constructor to load models for training
         ModelKeeper(const ConfigParser& config_parser, const std::string& config_v_key, const std::string& config_q_key, const std::string& training_key);
+
         ResNet v_model;
         ResNet q_model;
         torch::optim::AdamW v_optimizer;
@@ -20,6 +25,8 @@ class ModelKeeper {
         std::string checkpoints_dir;
 
         void SaveCheckpoint();
+        void SetEvalMode();
+        void SetTrainMode();
 };
 
 }   // namespace probs

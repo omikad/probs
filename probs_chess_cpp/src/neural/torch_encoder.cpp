@@ -29,11 +29,21 @@ vector<lczero::Move> const EncodedPositionBatch::FindBestMoves() const {
 }
 
 
+lczero::InputPlanes Encode(const lczero::PositionHistory& lchistory, int* transform_out) {
+    return lczero::EncodePositionForNN(
+        lczero::InputFormat::INPUT_112_WITH_CANONICALIZATION_V2,
+        lchistory,
+        8,
+        lczero::FillEmptyHistory::FEN_ONLY,
+        transform_out);
+}
+
+
 shared_ptr<EncodedPositionBatch> GetQModelEstimation(
         const vector<PositionHistoryTree*>& trees,
         const vector<int>& nodes,
         ResNet q_model,
-        at::Device& device) {
+        const at::Device& device) {
     assert(trees.size() == nodes.size());
     int batch_size = nodes.size();
 
@@ -45,14 +55,7 @@ shared_ptr<EncodedPositionBatch> GetQModelEstimation(
 
         int transform_out;
 
-        result.planes.push_back(
-            lczero::EncodePositionForNN(
-                lczero::InputFormat::INPUT_112_WITH_CANONICALIZATION_V2,
-                lchistory,
-                8,
-                lczero::FillEmptyHistory::FEN_ONLY,
-                &transform_out)
-        );
+        result.planes.push_back(Encode(lchistory, &transform_out));
 
         result.transforms.push_back(transform_out);
 
@@ -70,7 +73,7 @@ shared_ptr<EncodedPositionBatch> GetQModelEstimation(
     result.moves_estimation.resize(batch_size);
 
     for (int bi = 0; bi < batch_size; bi++) {
-        for (auto& move: trees[bi]->positions[nodes[bi]].GetBoard().GenerateLegalMoves()) {
+        for (auto move: trees[bi]->positions[nodes[bi]].GetBoard().GenerateLegalMoves()) {
             int move_idx = move.as_nn_index(result.transforms[bi]);
             int policy_idx = move_to_policy_idx_map[move_idx];
             int displacement = policy_idx / 64;

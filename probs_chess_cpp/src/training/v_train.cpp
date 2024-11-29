@@ -5,6 +5,49 @@ using namespace std;
 
 namespace probs {
 
+
+lczero::Move GetMoveWithExploration(shared_ptr<EncodedPositionBatch> encoded_batch, int batch_item_idx, int env_ply, bool exploration_full_random, int exploration_num_first_moves) {
+    if (exploration_full_random) {
+        int pi = rand() % (encoded_batch->moves_estimation[batch_item_idx].size());
+        return encoded_batch->moves_estimation[batch_item_idx][pi].first;
+    }
+
+    if (exploration_num_first_moves > 0) {
+        vector<pair<lczero::Move, float>>& moves_estimation = encoded_batch->moves_estimation[batch_item_idx];
+
+        double max_score = 0;
+        vector<double> scores;
+        for (auto& move_and_score : moves_estimation) {
+            double score = move_and_score.second;
+            scores.push_back(score);
+            max_score = max(max_score, score);
+        }
+
+        for (int i = 0; i < scores.size(); i++)
+            scores[i] = exp(scores[i] - max_score);
+        
+        double summ = 0;
+        for (int i = 0; i < scores.size(); i++)
+            summ += scores[i];
+
+        for (int i = 0; i < scores.size(); i++)
+            scores[i] /= summ;
+
+        double p = ((double)(rand() % 1000000) / 1000000);
+        int idx = 0;
+        for (; idx < scores.size(); idx++) {
+            p -= scores[idx];
+            if (p < 0)
+                break;
+        }
+
+        return moves_estimation[idx].first;
+    }
+
+    return encoded_batch->FindBestMove(batch_item_idx);
+}
+
+
 vector<pair<lczero::InputPlanes, float>> SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config_parser, const int n_games) {
     torch::NoGradGuard no_grad;
     q_model->eval();
@@ -12,6 +55,15 @@ vector<pair<lczero::InputPlanes, float>> SelfPlay(ResNet q_model, at::Device& de
     int batch_size = config_parser.GetInt("training.batch_size");
     int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps");
     double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio");
+    int exploration_num_first_moves = config_parser.GetInt("training.exploration_num_first_moves");
+    bool exploration_full_random = config_parser.KeyExist("training.exploration_full_random");
+
+    // cout << "[SELFPLAY] batch_size = " << batch_size << endl;
+    // cout << "[SELFPLAY] n_max_episode_steps = " << n_max_episode_steps << endl;
+    // cout << "[SELFPLAY] dataset_drop_ratio = " << dataset_drop_ratio << endl;
+    // cout << "[SELFPLAY] exploration_num_first_moves = " << exploration_num_first_moves << endl;
+    // cout << "[SELFPLAY] exploration_full_random = " << (exploration_full_random ? "true" : "false") << endl;
+
 
     int game_idx = 0;
     vector<float> game_scores(n_games, 0);
@@ -49,7 +101,7 @@ vector<pair<lczero::InputPlanes, float>> SelfPlay(ResNet q_model, at::Device& de
                 auto game_result = envs[ei]->GameResult();
 
                 if (game_result == lczero::GameResult::UNDECIDED) {
-                    auto move = encoded_batch->FindBestMove(ei);
+                    auto move = GetMoveWithExploration(encoded_batch, ei, envs[ei]->LastPosition().GetGamePly(), exploration_full_random, exploration_num_first_moves);
                     envs[ei]->Move(move);
                 }
                 else {
@@ -84,7 +136,17 @@ void TrainV(const ConfigParser& config_parser, ResNet v_model, at::Device& devic
     v_model->train();
 
     int dataset_size = v_dataset.size();
-    cout << "[Train.V] Train V model on dataset with " << dataset_size << " rows" << endl;
+    map<float, int> counter;
+    for (auto& row : v_dataset) counter[row.second]++;
+
+    cout << "[Train.V] Train V model on dataset with " << dataset_size << " rows";
+    if (counter.size() >= 10)
+        cout << endl;
+    else {
+        cout << ", stats: ";
+        for (auto kvp : counter) cout << "score=" << kvp.first << " count=" << kvp.second << "; ";
+        cout << "nulls=" << (double)counter[0] / v_dataset.size() << endl;
+    }
 
     int batch_size = config_parser.GetInt("training.batch_size");
 

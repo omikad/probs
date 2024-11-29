@@ -13,6 +13,7 @@
 #include "neural/torch_encoder.h"
 #include "utils/exception.h"
 #include "utils/torch_utils.h"
+#include "training/model_keeper.h"
 
 
 namespace probs {
@@ -44,14 +45,25 @@ class NStepLookaheadPlayer : public IPlayer {
 };
 
 
-class VQResnetPlayer : public IPlayer {
+class VResnetPlayer : public IPlayer {
     public:
-        VQResnetPlayer(const ConfigParser& config_parser, const std::string& config_key_prefix, const std::string& name);
+        VResnetPlayer(ModelKeeper& model_keeper, const ConfigParser& config_parser, const std::string& config_key_prefix, const std::string& name);
         virtual std::vector<lczero::Move> GetActions(std::vector<PositionHistoryTree*>& history);
         virtual std::string GetName() {return name;};
         const std::string name;
     private:
         ResNet v_model;
+        at::Device device;
+};
+
+
+class QResnetPlayer : public IPlayer {
+    public:
+        QResnetPlayer(ModelKeeper& model_keeper, const ConfigParser& config_parser, const std::string& config_key_prefix, const std::string& name);
+        virtual std::vector<lczero::Move> GetActions(std::vector<PositionHistoryTree*>& history);
+        virtual std::string GetName() {return name;};
+        const std::string name;
+    private:
         ResNet q_model;
         at::Device device;
 };

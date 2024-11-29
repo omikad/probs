@@ -130,26 +130,23 @@ ResNetImpl::ResNetImpl(const ConfigParser& config_parser, const string& config_k
         m_v_fc = register_module("m_v_fc", torch::nn::Linear(64, 1));
     }
 
-// TODO:
-//     // auto all_modules = modules(false);
-//     // https://pytorch.org/cppdocs/api/classtorch_1_1nn_1_1_module.html#_CPPv4NK5torch2nn6Module7modulesEb
-//     for (auto m : modules(false)) {
-//         if (m->name() == "torch::nn::Conv2dImpl") {
-//             torch::OrderedDict<std::string, torch::Tensor>
-//                 named_parameters = m->named_parameters(false);
-//             torch::Tensor* ptr_w = named_parameters.find("weight");
-//             torch::nn::init::kaiming_normal_(*ptr_w, 0, torch::kFanOut, torch::kReLU);
-//         }
-//         else if ((m->name() == "torch::nn::BatchNormImpl") ||
-//                  (m->name() == "torch::nn::GroupNormImpl")) {
-//             torch::OrderedDict<std::string, torch::Tensor>
-//                 named_parameters = m->named_parameters(false);
-//             torch::Tensor* ptr_w = named_parameters.find("weight");
-//             torch::nn::init::constant_(*ptr_w, 1.0);
-//             torch::Tensor* ptr_b = named_parameters.find("bias");
-//             torch::nn::init::constant_(*ptr_b, 0.0);
-//         }
-//     }
+    // auto all_modules = modules(false);
+    // https://pytorch.org/cppdocs/api/classtorch_1_1nn_1_1_module.html#_CPPv4NK5torch2nn6Module7modulesEb
+    for (auto m : modules(false)) {
+        // if (m->name() == "torch::nn::Conv2dImpl") {
+        //     torch::OrderedDict<std::string, torch::Tensor> named_parameters = m->named_parameters(false);
+        //     torch::Tensor* ptr_w = named_parameters.find("weight");
+        //     torch::nn::init::kaiming_normal_(*ptr_w, 0, torch::kFanOut, torch::kReLU);
+        // } else
+        if ((m->name() == "torch::nn::BatchNormImpl") ||
+                 (m->name() == "torch::nn::GroupNormImpl")) {
+            torch::OrderedDict<std::string, torch::Tensor> named_parameters = m->named_parameters(false);
+            torch::Tensor* ptr_w = named_parameters.find("weight");
+            torch::nn::init::constant_(*ptr_w, 1.0);
+            torch::Tensor* ptr_b = named_parameters.find("bias");
+            torch::nn::init::constant_(*ptr_b, 0.0);
+        }
+    }
 }
 
 

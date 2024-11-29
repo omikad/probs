@@ -23,6 +23,31 @@ torch::optim::AdamW adam_factory(const ConfigParser& config_parser, const string
 }
 
 
+/// @brief Constructor to load models for evaluation
+ModelKeeper::ModelKeeper(const ConfigParser& config_parser, const string& model_key) :
+        v_model(ResNet(config_parser, model_key + ".v", true)),
+        q_model(ResNet(config_parser, model_key + ".q", false)),
+        v_optimizer(torch::optim::AdamW(torch::nn::Sequential()->parameters(), torch::optim::AdamWOptions())),
+        q_optimizer(torch::optim::AdamW(torch::nn::Sequential()->parameters(), torch::optim::AdamWOptions())),
+        checkpoints_dir("")
+{
+    if (config_parser.KeyExist(model_key + ".checkpoint")) {
+        string filename = config_parser.GetString(model_key + ".checkpoint");
+
+        if (filename.size() > 0 && filename.back() == '*') {
+            cout << "[MODEL_KEEPER] Models V and Q loaded from " << filename << endl;
+            filename.pop_back();
+            torch::load(v_model, filename + "_v.ckpt");
+            torch::load(q_model, filename + "_q.ckpt");
+            return;
+        }
+    }
+
+    cout << "[MODEL_KEEPER] Models V and Q created from scratch" << endl;
+}
+
+
+/// @brief Constructor to load models for training
 ModelKeeper::ModelKeeper(const ConfigParser& config_parser, const string& config_v_key, const string& config_q_key, const string& training_key) :
         v_model(ResNet(config_parser, config_v_key, true)),
         q_model(ResNet(config_parser, config_q_key, false)),
@@ -33,7 +58,7 @@ ModelKeeper::ModelKeeper(const ConfigParser& config_parser, const string& config
         string filename = config_parser.GetString(training_key + ".checkpoint");
 
         if (filename.size() > 0 && filename.back() == '*') {
-            cout << "[TRAIN] Models V and Q loaded with their optimizers from " << filename << endl;
+            cout << "[MODEL_KEEPER] Models V and Q loaded with their optimizers from " << filename << endl;
             filename.pop_back();
             torch::load(v_model, filename + "_v.ckpt");
             torch::load(q_model, filename + "_q.ckpt");
@@ -43,7 +68,7 @@ ModelKeeper::ModelKeeper(const ConfigParser& config_parser, const string& config
         }
     }
 
-    cout << "[TRAIN] Models V and Q created from scratch" << endl;
+    cout << "[MODEL_KEEPER] Models V and Q created from scratch" << endl;
 }
 
 
@@ -62,6 +87,18 @@ void ModelKeeper::SaveCheckpoint() {
     torch::save(q_optimizer, path_base + "_qo.ckpt");
 
     cout << "[TRAIN] Checkpoint saved to " << path_base << "*" << endl;
+}
+
+
+void ModelKeeper::SetEvalMode() {
+    v_model->eval();
+    q_model->eval();
+}
+
+
+void ModelKeeper::SetTrainMode() {
+    v_model->train();
+    q_model->train();
 }
 
 

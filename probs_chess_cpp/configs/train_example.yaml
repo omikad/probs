@@ -1,6 +1,6 @@
 name: 'Example training run'
 env:
-  n_max_episode_steps: 100
+  n_max_episode_steps: 500
 model:
   v:
     type: resnet
@@ -11,15 +11,16 @@ model:
     res_blocks: 3
     filters: 80
 training:
-  n_high_level_iterations: 1
-  v_train_episodes: 1000
+  n_high_level_iterations: 5
+  v_train_episodes: 10000
 #   q_train_episodes: 100
-  dataset_drop_ratio: 0.5
+  dataset_drop_ratio: 0.8
 #   q_dataset_episodes_sub_iter: 1
 #   tree_num_q_s_a_calls: 100
 #   tree_max_depth: 10000
 #   tree_q_batch_size: 16
-#   exploration_num_sampling_moves: 10
+  # exploration_full_random: 1      # pick random moves during V training (for debugging)
+  exploration_num_first_moves: 30
   batch_size: 128
   learning_rate: 0.0003
   weight_decay: 0.00001
@@ -29,6 +30,6 @@ training:
   # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241127-181135*'
 infra:
   gpu: 0                               # gpu id, use -1 for cpu
-  n_threads: 3
+  n_threads: 5
   # evaluate_n_games: 100
   # log: 'mem'                            # write learning curves to 'tf' or 'mem'
