@@ -16,6 +16,7 @@
 #include "utils/ts_queue.h"
 #include "training/model_keeper.h"
 #include "training/v_train.h"
+#include "training/q_train.h"
 
 
 namespace probs {
@@ -36,8 +37,22 @@ public:
 
 class QueueResponse_SelfPlay : public QueueItem {
 public:
-    std::vector<std::pair<lczero::InputPlanes, float>> v_dataset;
-    explicit QueueResponse_SelfPlay(const std::vector<std::pair<lczero::InputPlanes, float>>& rows) : v_dataset(rows) {}
+    VDataset v_dataset;
+    explicit QueueResponse_SelfPlay(const VDataset& rows) : v_dataset(rows) {}
+};
+
+
+class QueueCommand_GetQDataset : public QueueItem {
+public:
+    int n_games;
+    explicit QueueCommand_GetQDataset(const int n_games) : n_games(n_games) {}
+};
+
+
+class QueueResponse_QDataset : public QueueItem {
+public:
+    QDataset q_dataset;
+    explicit QueueResponse_QDataset(const QDataset& rows) : q_dataset(rows) {}
 };
 
 
@@ -45,7 +60,8 @@ class ProbsImpl {
     public:
         ProbsImpl(const ConfigParser& config_parser);
         void GoTrain();
-        void SelfPlayAndTrainV(const int v_train_episodes, const double dataset_drop_ratio);
+        void SelfPlayAndTrainV(const int v_train_episodes);
+        void GetQDatasetAndTrain(const int q_train_episodes);
         const ConfigParser& config_parser;
         ModelKeeper model_keeper;
         at::Device device;

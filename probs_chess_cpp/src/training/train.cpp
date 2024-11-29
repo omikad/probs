@@ -25,6 +25,10 @@ void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQu
                 // cout << "[WORKER " << thread_id << "] Got command self play " << command_self_play->n_games << " games. Device = " << impl.device << endl;
                 auto rows = SelfPlay(impl.model_keeper.q_model, impl.device, impl.config_parser, command_self_play->n_games);
                 resultsQueue.enqueue(make_shared<QueueResponse_SelfPlay>(rows));
+            } else if (auto command_get_q = dynamic_pointer_cast<QueueCommand_GetQDataset>(command)) {
+                cout << "[WORKER " << thread_id << "] Got command get q dataset " << command_get_q->n_games << " games. Device = " << impl.device << endl;
+                auto rows = GetQDataset(impl.model_keeper.v_model, impl.model_keeper.q_model, impl.device, impl.config_parser, command_get_q->n_games);
+                resultsQueue.enqueue(make_shared<QueueResponse_QDataset>(rows));
             } else {
                 cout << "[WORKER " << thread_id << "] Unknown command type!" << endl;
             }
@@ -49,7 +53,7 @@ ProbsImpl::ProbsImpl(const ConfigParser& config_parser)
 }
 
 
-void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes, const double dataset_drop_ratio) {
+void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes) {
     int wcnt = workers.size();
 
     vector<int> worker_games(wcnt, v_train_episodes / wcnt);
@@ -62,7 +66,7 @@ void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes, const double datas
             taskQueues[wi].enqueue(make_shared<QueueCommand_SelfPlay>(curr_games));
     }
 
-    vector<pair<lczero::InputPlanes, float>> v_dataset;
+    VDataset v_dataset;
 
     for (int wi = 0; wi < wcnt; wi++) {
         auto response = resultQueues[wi].dequeue();
@@ -78,14 +82,59 @@ void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes, const double datas
 }
 
 
+void ProbsImpl::GetQDatasetAndTrain(const int q_train_episodes) {
+    int wcnt = workers.size();
+
+    vector<int> worker_games(wcnt, q_train_episodes / wcnt);
+    for (int wi = 0; wi < q_train_episodes % wcnt; wi++)
+        worker_games[wi]++;
+
+    for (int wi = 0; wi < wcnt; wi++) {
+        int curr_games = worker_games[wi];
+        if (curr_games > 0)
+            taskQueues[wi].enqueue(make_shared<QueueCommand_GetQDataset>(curr_games));
+    }
+
+    QDataset q_dataset;
+
+    for (int wi = 0; wi < wcnt; wi++) {
+        auto response = resultQueues[wi].dequeue();
+
+        if (auto response_q_dataset = dynamic_pointer_cast<QueueResponse_QDataset>(response)) {
+            cout << "Got self play response from worker " << wi << " with " << response_q_dataset->q_dataset.size() << " rows" << endl;
+            for (auto& item: response_q_dataset->q_dataset)
+                q_dataset.push_back(item);
+        }
+    }
+
+    cout << "GOT TOTAL Q DATASET " << q_dataset.size() << endl;
+
+    // TrainV(config_parser, model_keeper.v_model, device, model_keeper.v_optimizer, v_dataset);
+}
+
+
 void ProbsImpl::GoTrain() {
-    int n_high_level_iterations = config_parser.GetInt("training.n_high_level_iterations");
-    int v_train_episodes = config_parser.GetInt("training.v_train_episodes");
+    int batch_size = config_parser.GetInt("training.batch_size");
     double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio");
+    bool exploration_full_random = config_parser.KeyExist("training.exploration_full_random");
+    int exploration_num_first_moves = config_parser.GetInt("training.exploration_num_first_moves");
+    int n_high_level_iterations = config_parser.GetInt("training.n_high_level_iterations");
+    int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps");
+    int v_train_episodes = config_parser.GetInt("training.v_train_episodes");
+    int q_train_episodes = config_parser.GetInt("training.q_train_episodes");
+    int tree_num_q_s_a_calls = config_parser.GetInt("training.tree_num_q_s_a_calls");
+    int tree_max_depth = config_parser.GetInt("training.tree_max_depth");
+
     cout << "[TRAIN] Start training:" << endl;
+    cout << "  batch_size = " << batch_size << endl;
+    cout << "  exploration_full_random = " << (exploration_full_random ? "true" : "false") << endl;
+    cout << "  exploration_num_first_moves = " << exploration_num_first_moves << endl;
     cout << "  n_high_level_iterations = " << n_high_level_iterations << endl;
+    cout << "  n_max_episode_steps = " << n_max_episode_steps << endl;
     cout << "  v_train_episodes = " << v_train_episodes << endl;
-    cout << "  dataset_drop_ratio = " << dataset_drop_ratio << endl;
+    cout << "  q_train_episodes = " << q_train_episodes << endl;
+    cout << "  tree_num_q_s_a_calls = " << tree_num_q_s_a_calls << endl;
+    cout << "  tree_max_depth = " << tree_max_depth << endl;
 
     torch::set_num_threads(1);
 
@@ -101,7 +150,8 @@ void ProbsImpl::GoTrain() {
     }
 
     for (int high_level_i = 0; high_level_i < n_high_level_iterations; high_level_i++) {
-        SelfPlayAndTrainV(v_train_episodes, dataset_drop_ratio);
+        SelfPlayAndTrainV(v_train_episodes);
+        // GetQDatasetAndTrain(q_train_episodes);
 
         model_keeper.SetEvalMode();
         model_keeper.SaveCheckpoint();

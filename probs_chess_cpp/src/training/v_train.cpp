@@ -48,7 +48,7 @@ lczero::Move GetMoveWithExploration(shared_ptr<EncodedPositionBatch> encoded_bat
 }
 
 
-vector<pair<lczero::InputPlanes, float>> SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config_parser, const int n_games) {
+VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config_parser, const int n_games) {
     torch::NoGradGuard no_grad;
     q_model->eval();
 
@@ -64,11 +64,8 @@ vector<pair<lczero::InputPlanes, float>> SelfPlay(ResNet q_model, at::Device& de
     // cout << "[SELFPLAY] exploration_num_first_moves = " << exploration_num_first_moves << endl;
     // cout << "[SELFPLAY] exploration_full_random = " << (exploration_full_random ? "true" : "false") << endl;
 
-
     int game_idx = 0;
-    vector<float> game_scores(n_games, 0);
-
-    vector<pair<lczero::InputPlanes, float>> rows;
+    VDataset rows;
 
     vector<shared_ptr<EnvPlayer>> envs;
     vector<vector<int>> env_rows;
@@ -132,7 +129,7 @@ vector<pair<lczero::InputPlanes, float>> SelfPlay(ResNet q_model, at::Device& de
 }
 
 
-void TrainV(const ConfigParser& config_parser, ResNet v_model, at::Device& device, torch::optim::AdamW& v_optimizer, vector<pair<lczero::InputPlanes, float>>& v_dataset) {
+void TrainV(const ConfigParser& config_parser, ResNet v_model, at::Device& device, torch::optim::AdamW& v_optimizer, VDataset& v_dataset) {
     v_model->train();
 
     int dataset_size = v_dataset.size();
@@ -145,7 +142,7 @@ void TrainV(const ConfigParser& config_parser, ResNet v_model, at::Device& devic
     else {
         cout << ", stats: ";
         for (auto kvp : counter) cout << "score=" << kvp.first << " count=" << kvp.second << "; ";
-        cout << "nulls=" << (double)counter[0] / v_dataset.size() << endl;
+        cout << "zeros=" << (double)counter[0] / v_dataset.size() << endl;
     }
 
     int batch_size = config_parser.GetInt("training.batch_size");
