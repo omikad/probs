@@ -22,6 +22,7 @@ void EnvPlayer::Move(const lczero::Move &move) {
     ComputeGameResult();
 }
 
+
 void EnvPlayer::ComputeGameResult() {
     game_result = tree.ComputeGameResult(tree.LastIndex());
     if (game_result == lczero::GameResult::UNDECIDED && tree.Last().GetGamePly() >= n_max_episode_steps)

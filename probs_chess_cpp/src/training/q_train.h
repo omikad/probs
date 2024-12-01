@@ -13,11 +13,21 @@
 #include "neural/torch_encoder.h"
 #include "utils/torch_utils.h"
 #include "utils/exception.h"
+#include "training/training_helpers.h"
 
 
 namespace probs {
 
-using QDataset = std::vector<std::pair<lczero::InputPlanes, std::vector<std::pair<lczero::Move, float>>>>;
+
+struct QDatasetRow {
+    lczero::InputPlanes input_planes;
+    int transform;
+    std::vector<MoveEstimation> target;
+
+    QDatasetRow(const EncodedPositionBatch& node_encoded, const std::vector<MoveEstimation>& moves_estimation);
+};
+
+using QDataset = std::vector<QDatasetRow>;
 
 QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const ConfigParser& config_parser, const int n_games);
 

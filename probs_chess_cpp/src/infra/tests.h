@@ -195,7 +195,7 @@ void V_predict_self_play(const ConfigParser& config_parser) {
             at::Device device = torch::kCPU;
             auto encoded_batch = GetQModelEstimation(trees, nodes, model_keeper.q_model, device);
 
-            auto move = GetMoveWithExploration(encoded_batch, 0, env_player.Tree().Last().GetGamePly(), false, EXPLORATION_NUM_FIRST_MOVES);
+            auto move = GetMoveWithExploration(encoded_batch->moves_estimation[0], env_player.Tree().Last().GetGamePly(), false, EXPLORATION_NUM_FIRST_MOVES);
 
             // cout << "PLY=" << env_player.Ply() << " " << "Player selected move=" << move.as_string() << " V prediction=" << predictions.back() << endl;
 

@@ -14,7 +14,7 @@ player1:
       type: resnet
       res_blocks: 3
       filters: 80
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241129-104608*'
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241130-121758*'
 
 player2:
   kind: "random"

@@ -11,6 +11,7 @@
 #include "chess/policy_map.h"
 #include "neural/encoder.h"
 #include "neural/network.h"
+#include "training/training_helpers.h"
 
 
 namespace probs {
@@ -18,7 +19,7 @@ namespace probs {
 struct EncodedPositionBatch {
     std::vector<int> transforms;
     std::vector<lczero::InputPlanes> planes;
-    std::vector<std::vector<std::pair<lczero::Move, float>>> moves_estimation;
+    std::vector<std::vector<MoveEstimation>> moves_estimation;
 
     lczero::Move FindBestMove(const int bi) const;
     std::vector<lczero::Move> const FindBestMoves() const;
@@ -28,10 +29,9 @@ struct EncodedPositionBatch {
 lczero::InputPlanes Encode(const lczero::PositionHistory& lchistory, int* transform_out);
 
 
-std::shared_ptr<EncodedPositionBatch> GetQModelEstimation(
-    const std::vector<PositionHistoryTree*>& trees,
-    const std::vector<int>& nodes,
-    ResNet q_model,
-    const at::Device& device);
+std::shared_ptr<EncodedPositionBatch> GetQModelEstimation(const std::vector<PositionHistoryTree*>& trees, const std::vector<int>& nodes, ResNet q_model, const at::Device& device);
+
+
+std::shared_ptr<EncodedPositionBatch> GetQModelEstimation_OneNode(PositionHistoryTree& tree, const int node, ResNet q_model, const at::Device& device);
 
 }  // namespace probs

@@ -11,10 +11,10 @@ lczero::Move EncodedPositionBatch::FindBestMove(const int bi) const {
     lczero::Move best_move;
 
     for (auto& move_and_score : moves_estimation[bi]) {
-        float score = move_and_score.second;
+        float score = move_and_score.score;
         if (score > best_score) {
             best_score = score;
-            best_move = move_and_score.first;
+            best_move = move_and_score.move;
         }
     }
     return best_move;
@@ -39,11 +39,7 @@ lczero::InputPlanes Encode(const lczero::PositionHistory& lchistory, int* transf
 }
 
 
-shared_ptr<EncodedPositionBatch> GetQModelEstimation(
-        const vector<PositionHistoryTree*>& trees,
-        const vector<int>& nodes,
-        ResNet q_model,
-        const at::Device& device) {
+shared_ptr<EncodedPositionBatch> GetQModelEstimation(const vector<PositionHistoryTree*>& trees, const vector<int>& nodes, ResNet q_model, const at::Device& device) {
     assert(trees.size() == nodes.size());
     int batch_size = nodes.size();
 
@@ -89,5 +85,13 @@ shared_ptr<EncodedPositionBatch> GetQModelEstimation(
 
     return make_shared<EncodedPositionBatch>(result);
 }
+
+
+shared_ptr<EncodedPositionBatch> GetQModelEstimation_OneNode(PositionHistoryTree& tree, const int node, ResNet q_model, const at::Device& device) {
+    vector<PositionHistoryTree*> trees = {&tree};
+    vector<int> nodes = {node};
+    return GetQModelEstimation(trees, nodes, q_model, device);
+}
+
 
 }  // namespace probs

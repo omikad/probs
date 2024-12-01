@@ -18,9 +18,9 @@ class EnvPlayer {
         lczero::GameResult GameResult() const {return game_result;}
         const lczero::ChessBoard& LastChessBoard() const {return tree.Last().GetBoard();}
         int Ply() {return tree.Last().GetGamePly();}
+        void ComputeGameResult();
 
     private:
-        void ComputeGameResult();
         const int n_max_episode_steps;
         PositionHistoryTree tree;
         lczero::GameResult game_result;

@@ -6,48 +6,6 @@ using namespace std;
 namespace probs {
 
 
-lczero::Move GetMoveWithExploration(shared_ptr<EncodedPositionBatch> encoded_batch, int batch_item_idx, int env_ply, bool exploration_full_random, int exploration_num_first_moves) {
-    if (exploration_full_random) {
-        int pi = rand() % (encoded_batch->moves_estimation[batch_item_idx].size());
-        return encoded_batch->moves_estimation[batch_item_idx][pi].first;
-    }
-
-    if (exploration_num_first_moves > 0) {
-        vector<pair<lczero::Move, float>>& moves_estimation = encoded_batch->moves_estimation[batch_item_idx];
-
-        double max_score = 0;
-        vector<double> scores;
-        for (auto& move_and_score : moves_estimation) {
-            double score = move_and_score.second;
-            scores.push_back(score);
-            max_score = max(max_score, score);
-        }
-
-        for (int i = 0; i < scores.size(); i++)
-            scores[i] = exp(scores[i] - max_score);
-        
-        double summ = 0;
-        for (int i = 0; i < scores.size(); i++)
-            summ += scores[i];
-
-        for (int i = 0; i < scores.size(); i++)
-            scores[i] /= summ;
-
-        double p = ((double)(rand() % 1000000) / 1000000);
-        int idx = 0;
-        for (; idx < scores.size(); idx++) {
-            p -= scores[idx];
-            if (p < 0)
-                break;
-        }
-
-        return moves_estimation[idx].first;
-    }
-
-    return encoded_batch->FindBestMove(batch_item_idx);
-}
-
-
 VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config_parser, const int n_games) {
     torch::NoGradGuard no_grad;
     q_model->eval();
@@ -98,7 +56,7 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
                 auto game_result = envs[ei]->GameResult();
 
                 if (game_result == lczero::GameResult::UNDECIDED) {
-                    auto move = GetMoveWithExploration(encoded_batch, ei, envs[ei]->LastPosition().GetGamePly(), exploration_full_random, exploration_num_first_moves);
+                    auto move = GetMoveWithExploration(encoded_batch->moves_estimation[ei], envs[ei]->LastPosition().GetGamePly(), exploration_full_random, exploration_num_first_moves);
                     envs[ei]->Move(move);
                 }
                 else {

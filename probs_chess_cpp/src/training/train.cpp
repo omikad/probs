@@ -69,6 +69,8 @@ void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes) {
     VDataset v_dataset;
 
     for (int wi = 0; wi < wcnt; wi++) {
+        if (worker_games[wi] == 0) continue;
+
         auto response = resultQueues[wi].dequeue();
 
         if (auto response_self_play = dynamic_pointer_cast<QueueResponse_SelfPlay>(response)) {
@@ -109,7 +111,7 @@ void ProbsImpl::GetQDatasetAndTrain(const int q_train_episodes) {
 
     cout << "GOT TOTAL Q DATASET " << q_dataset.size() << endl;
 
-    // TrainV(config_parser, model_keeper.v_model, device, model_keeper.v_optimizer, v_dataset);
+    // TrainQ(config_parser, model_keeper.v_model, device, model_keeper.v_optimizer, v_dataset);
 }
 
 
@@ -151,7 +153,7 @@ void ProbsImpl::GoTrain() {
 
     for (int high_level_i = 0; high_level_i < n_high_level_iterations; high_level_i++) {
         SelfPlayAndTrainV(v_train_episodes);
-        // GetQDatasetAndTrain(q_train_episodes);
+        GetQDatasetAndTrain(q_train_episodes);
 
         model_keeper.SetEvalMode();
         model_keeper.SaveCheckpoint();

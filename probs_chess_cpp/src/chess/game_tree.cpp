@@ -91,6 +91,7 @@ int PositionHistoryTree::Append(const int node, lczero::Move move) {
 
 
 void PositionHistoryTree::PopLast() {
+    assert(positions.size() > 0);
     int removed = positions.size() - 1;
     int parent = parents[removed];
 
