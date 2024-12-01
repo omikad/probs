@@ -15,15 +15,14 @@ class EnvPlayer {
         void Move(const lczero::Move& move);
         PositionHistoryTree& Tree() {return tree;}
         const lczero::Position& LastPosition() const {return tree.Last();}
-        lczero::GameResult GameResult() const {return game_result;}
+        lczero::GameResult GameResult(const int node) const;
+        lczero::GameResult GameResult() const {return GameResult(-1);}
         const lczero::ChessBoard& LastChessBoard() const {return tree.Last().GetBoard();}
         int Ply() {return tree.Last().GetGamePly();}
-        void ComputeGameResult();
 
     private:
         const int n_max_episode_steps;
         PositionHistoryTree tree;
-        lczero::GameResult game_result;
 };
 
 }  // namespace probs

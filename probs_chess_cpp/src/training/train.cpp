@@ -109,9 +109,7 @@ void ProbsImpl::GetQDatasetAndTrain(const int q_train_episodes) {
         }
     }
 
-    cout << "GOT TOTAL Q DATASET " << q_dataset.size() << endl;
-
-    // TrainQ(config_parser, model_keeper.v_model, device, model_keeper.v_optimizer, v_dataset);
+    TrainQ(config_parser, model_keeper.q_model, device, model_keeper.q_optimizer, q_dataset);
 }
 
 

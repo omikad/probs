@@ -18,7 +18,7 @@ class PositionHistoryTree {
         lczero::GameResult ComputeGameResult(const int node) const;
 
         const lczero::Position& Last() const {return positions.back();}
-        const int LastIndex() {
+        const int LastIndex() const {
             assert(positions.size() > 0);
             return positions.size() - 1;
         }

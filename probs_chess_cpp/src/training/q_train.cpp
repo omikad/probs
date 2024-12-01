@@ -26,6 +26,14 @@ struct QTrainNode {
         moves.push_back({move, score});
     }
 
+    int FindKidByMove(const lczero::Move move) const {
+        assert(kids.size() == moves.size());
+        for (int ki = 0; ki < kids.size(); ki++)
+            if (moves[ki].move == move)
+                return kids[ki];
+        return -1;
+    }
+
     bool IsLeaf() const {
         return kids.size() == 0;
     }
@@ -57,8 +65,11 @@ struct EnvExpandState {
         n_qsa_calls = 0;
     }
 
-    int GetTopPriorityNode() const {
-        return beam.rbegin()->second;
+    int PopTopPriorityNode() {
+        assert(beam.size() > 0);
+        int node = beam.rbegin()->second;
+        beam.erase(prev(beam.end()));
+        return node;
     }
 
     vector<int> BFS(const int start_node) const {
@@ -84,6 +95,7 @@ struct EnvExpandState {
                 beam.insert({{kid_priority, kid_node}, kid_node});
             }
 
+            assert(kid_node == nodes.size());
             nodes.push_back(QTrainNode(node_depth + 1));
 
             nodes[node].AppendKid(kid_node, move, score);
@@ -92,15 +104,16 @@ struct EnvExpandState {
         }
     }
 
+    map<int, float> ComputeLeafValues(ResNet v_model, const at::Device device, const int batch_size) {
+        vector<int> bfs = BFS(top_node);
 
-    map<int, float> ComputeLeafValues(const vector<int>& bfs, const PositionHistoryTree& tree, ResNet v_model, const at::Device device, const int batch_size) const {
         vector<int> leaf_nodes;
         vector<lczero::InputPlanes> leaf_input_planes;
         for (int node : bfs)
             if (nodes[node].IsLeaf()) {
                 leaf_nodes.push_back(node);
                 int transform_out;
-                leaf_input_planes.push_back(Encode(tree.ToLczeroHistory(node), &transform_out));
+                leaf_input_planes.push_back(Encode(env.Tree().ToLczeroHistory(node), &transform_out));
             }
 
         map<int, float> leaf_values;
@@ -127,11 +140,8 @@ struct EnvExpandState {
         return leaf_values;
     }
 
-
-    void RecomputeMovesEstimation(const PositionHistoryTree& tree, ResNet v_model, at::Device device, int batch_size) {
-        vector<int> bfs = BFS(top_node);
-
-        map<int, float> leaf_values = ComputeLeafValues(bfs, tree, v_model, device, batch_size);
+    void ComputeTreeValues(ResNet v_model, at::Device device, int batch_size) {
+        map<int, float> leaf_values = ComputeLeafValues(v_model, device, batch_size);
 
         auto dfs = [&](auto& self, int node)->float {
 
@@ -156,42 +166,34 @@ struct EnvExpandState {
     void Move(bool exploration_full_random, int exploration_num_first_moves) {
         auto move = GetMoveWithExploration(nodes[top_node].moves, env.Tree().positions[top_node].GetGamePly(), exploration_full_random, exploration_num_first_moves);
 
-        // TODO: reuse previous computations
+        int new_top_node = nodes[top_node].FindKidByMove(move);
+        assert(new_top_node > top_node);
 
-        set<int> removed_nodes;
+        vector<int> new_tree_nodes_arr = BFS(new_top_node);
 
-        while (top_node < env.Tree().positions.size() - 1) {
-            removed_nodes.insert(env.Tree().LastIndex());
-            nodes.pop_back();
+        if (nodes[new_top_node].kids.size() == 0) {
+            assert(new_tree_nodes_arr.size() == 1);
+            beam.clear();
+            beam.insert({{1000, new_top_node}, new_top_node});
         }
-        assert(top_node == env.Tree().LastIndex());
-        assert(top_node == nodes.size() - 1);
+        else {
+            set<int> new_tree_nodes_set(begin(new_tree_nodes_arr), end(new_tree_nodes_arr));
 
-        for (int node = 0; node < nodes.size(); node++) {
-            auto& qnode = nodes[node];
-            for (int ki = qnode.kids.size() - 1; ki >= 0; ki--) {
-                int kid_node = qnode.kids[ki];
-                if (removed_nodes.find(kid_node) != removed_nodes.end()) {
-                    int j = qnode.kids.size() - 1;
-                    swap(qnode.kids[ki], qnode.kids[j]);
-                    swap(qnode.moves[ki], qnode.moves[j]);
-                    qnode.kids.pop_back();
-                    qnode.moves.pop_back();
+            map<pair<float, int>, int> new_beam;
+            for (const auto& kvp : beam) {
+                float priority = kvp.first.first;
+                int node = kvp.second;
+                if (new_tree_nodes_set.find(node) != new_tree_nodes_set.end()) {
+                    if (env.Tree().parents[node] == new_top_node)
+                        priority = 1000;
+                    new_beam.insert({{priority, node}, node});
                 }
             }
+            beam = new_beam;
         }
 
-        env.Move(move);
-
-        int new_top_node = env.Tree().LastIndex();
-
-        nodes[top_node].AppendKid(new_top_node, move, 0);
-        nodes.push_back(QTrainNode(0));
-
         top_node = new_top_node;
-        beam.clear();
-        beam.insert({{1000.0, top_node}, top_node});
-        expand_tree_size = 1;
+        expand_tree_size = new_tree_nodes_arr.size();
         n_qsa_calls = 0;
     }
 
@@ -234,72 +236,125 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
     vector<shared_ptr<EnvExpandState>> envs;
 
     while (game_idx < n_games || envs.size() > 0) {
-cout << 1 << endl;
 
         if (envs.size() < batch_size && game_idx < n_games) {
-cout << 2 << endl;
             envs.push_back(make_shared<EnvExpandState>(EnvExpandState(lczero::ChessBoard::kStartposFen, n_max_episode_steps)));
             game_idx++;
         }
 
         else {
-cout << 3 << endl;
 
             vector<PositionHistoryTree*> trees;
             vector<int> nodes;
             for (int ei = 0; ei < envs.size(); ei++) {
                 trees.push_back(&envs[ei]->env.Tree());
-                nodes.push_back(envs[ei]->GetTopPriorityNode());
-                envs[ei]->beam.erase(std::prev(envs[ei]->beam.end()));
+                nodes.push_back(envs[ei]->PopTopPriorityNode());
             }
             auto encoded_batch = GetQModelEstimation(trees, nodes, q_model, device);
-cout << 4 << endl;
 
             for (int ei = 0; ei < envs.size(); ei++)
                 envs[ei]->AppendChildren(nodes[ei], encoded_batch->moves_estimation[ei], tree_max_depth);
-cout << 5 << endl;
 
             for (int ei = envs.size() - 1; ei >= 0; ei--) {
-cout << 6 << endl;
                 envs[ei]->n_qsa_calls++;
                 
-                if (envs[ei]->n_qsa_calls < tree_num_q_s_a_calls)    // need expand more
+                if (envs[ei]->beam.size() > 0 && envs[ei]->n_qsa_calls < tree_num_q_s_a_calls)    // need expand more
                     continue;
-cout << 7 << endl;
 
-                envs[ei]->RecomputeMovesEstimation(*trees[ei], v_model, device, batch_size);
+                envs[ei]->ComputeTreeValues(v_model, device, batch_size);
 
                 if (rand() % 1000000 > dataset_drop_ratio * 1000000) {
-cout << 8 << endl;
                     int top_node = envs[ei]->top_node;
                     auto top_node_encoded = GetQModelEstimation_OneNode(*trees[ei], top_node, q_model, device);       // TODO: it was computed above, need to save it somewhere and reuse here
                     rows.push_back(QDatasetRow(*top_node_encoded, envs[ei]->nodes[top_node].moves));
-
-cout << "dataset rows: " << rows.size() << endl;
                 }
-cout << 9 << endl;
 
-                auto game_result = envs[ei]->env.GameResult();
+                auto game_result = envs[ei]->env.GameResult(envs[ei]->top_node);
 
                 if (game_result == lczero::GameResult::UNDECIDED) {
-cout << 10 << endl;
                     envs[ei]->Move(exploration_full_random, exploration_num_first_moves);
                 }
                 else {
-cout << 11 << endl;
-                    if (ei < envs.size() - 1) {
+                    if (ei < envs.size() - 1)
                         swap(envs[ei], envs[envs.size() - 1]);
-                    }
                     envs.pop_back();
                 }
             }
         }
     }
 
-cout << "DONE!" << endl;
-
     return rows;
 }
+
+
+void TrainQ(const ConfigParser& config_parser, ResNet q_model, at::Device& device, torch::optim::AdamW& q_optimizer, QDataset& q_dataset) {
+    int dataset_size = q_dataset.size();
+    cout << "[Train.Q] Train Q model on dataset with " << dataset_size << " rows";
+
+    int batch_size = config_parser.GetInt("training.batch_size");
+
+    vector<int> indices(dataset_size);
+    for (int i = 0; i < dataset_size; i++) indices[i] = i;
+    for (int i = 0; i < dataset_size; i++) swap(indices[i], indices[i + rand() % (dataset_size - i)]);
+
+    for (int end = batch_size; end <= dataset_size; end += batch_size) {
+        // torch::Tensor target = torch::zeros({batch_size, 1});
+        torch::Tensor input = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
+        torch::Tensor target_vals = torch::zeros({batch_size, lczero::kNumOutputPolicyFilters, 8, 8});
+        torch::Tensor target_mask = torch::zeros({batch_size, lczero::kNumOutputPolicyFilters, 8, 8});
+        int actions_mask_norm = 0;
+
+        for (int ri = end - batch_size; ri < end; ri++) {
+            int bi = ri - end + batch_size;
+            int row_i = indices[ri];
+
+            for (const auto& move_target : q_dataset[row_i].target) {
+                int move_idx = move_target.move.as_nn_index(q_dataset[row_i].transform);
+                int policy_idx = move_to_policy_idx_map[move_idx];
+                int displacement = policy_idx / 64;
+                int square = policy_idx % 64;
+                int row = square / 8;
+                int col = square % 8;
+                target_vals[bi][displacement][row][col] = move_target.score;
+                target_mask[bi][displacement][row][col] = 1;
+                actions_mask_norm++;
+            }
+
+            for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
+                const lczero::InputPlane& plane = q_dataset[row_i].input_planes[pi];
+                for (auto bit : lczero::IterateBits(plane.mask)) {
+                    input[bi][pi][bit / 8][bit % 8] = plane.value;
+                }
+            }
+        }
+
+        // cout << "Input: " << DebugString(input) << endl;
+        // cout << "TargetVals: " << DebugString(target_vals) << endl;
+        // cout << "TargetMask: " << DebugString(target_mask) << endl;
+
+        input = input.to(device);
+        target_vals = target_vals.to(device);
+        target_mask = target_mask.to(device);
+
+        q_optimizer.zero_grad();
+
+        torch::Tensor q_prediction = q_model->forward(input);
+        // cout << "Prediction: " << DebugString(q_prediction.to(torch::kCPU)) << endl;
+
+        torch::Tensor loss = torch::mse_loss(q_prediction, target_vals, at::Reduction::None);
+        // cout << "Loss: " << DebugString(loss) << endl;
+
+        loss = torch::sum(loss * target_mask) / actions_mask_norm;
+
+        // cout << "Loss: " << DebugString(loss) << endl;
+
+        loss.backward();
+
+        q_optimizer.step();
+        cout << "QLoss: " << loss.item<float>() << endl;
+    }
+}
+
 
 
 }  // namespace probs

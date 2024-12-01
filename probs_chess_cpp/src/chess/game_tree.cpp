@@ -60,16 +60,16 @@ lczero::GameResult PositionHistoryTree::ComputeGameResult(const int node) const 
     if (position.GetRepetitions() >= 2) return lczero::GameResult::DRAW;
 
     // Make game simpler to test NN training:
-    // if (position.GetGamePly() >= 200) {
-    //     int ours = board.ours().count();
-    //     int theirs = board.theirs().count();
+    if (position.GetGamePly() >= 200) {
+        int ours = board.ours().count();
+        int theirs = board.theirs().count();
 
-    //     if (ours == theirs) return lczero::GameResult::UNDECIDED;
-    //     if (position.IsBlackToMove())
-    //         return ours > theirs ? lczero::GameResult::BLACK_WON : lczero::GameResult::WHITE_WON;
-    //     else
-    //         return ours > theirs ? lczero::GameResult::WHITE_WON : lczero::GameResult::BLACK_WON;
-    // }
+        if (ours == theirs) return lczero::GameResult::UNDECIDED;
+        if (position.IsBlackToMove())
+            return ours > theirs ? lczero::GameResult::BLACK_WON : lczero::GameResult::WHITE_WON;
+        else
+            return ours > theirs ? lczero::GameResult::WHITE_WON : lczero::GameResult::BLACK_WON;
+    }
 
     return lczero::GameResult::UNDECIDED;
 };

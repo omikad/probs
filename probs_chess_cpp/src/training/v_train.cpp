@@ -153,7 +153,7 @@ void TrainV(const ConfigParser& config_parser, ResNet v_model, at::Device& devic
 
         v_optimizer.step();
 
-        cout << "Loss: " << loss.item<float>() << endl;
+        cout << "VLoss: " << loss.item<float>() << endl;
     }
 }
 
