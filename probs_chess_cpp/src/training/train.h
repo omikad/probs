@@ -14,6 +14,7 @@
 #include "infra/config_parser.h"
 #include "neural/encoder.h"
 #include "utils/ts_queue.h"
+#include "utils/usage_counter.h"
 #include "training/model_keeper.h"
 #include "training/v_train.h"
 #include "training/q_train.h"
@@ -60,8 +61,8 @@ class ProbsImpl {
     public:
         ProbsImpl(const ConfigParser& config_parser);
         void GoTrain();
-        void SelfPlayAndTrainV(const int v_train_episodes);
-        void GetQDatasetAndTrain(const int q_train_episodes);
+        void SelfPlayAndTrainV(UsageCounter& usage, const int v_train_episodes);
+        void GetQDatasetAndTrain(UsageCounter& usage, const int q_train_episodes);
         const ConfigParser& config_parser;
         ModelKeeper model_keeper;
         at::Device device;

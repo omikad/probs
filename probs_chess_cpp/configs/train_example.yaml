@@ -1,6 +1,6 @@
 name: 'Example training run'
 env:
-  n_max_episode_steps: 500
+  n_max_episode_steps: 50
 model:
   v:
     type: resnet
@@ -12,8 +12,8 @@ model:
     filters: 80
 training:
   n_high_level_iterations: 1
-  v_train_episodes: 10000
-  q_train_episodes: 1000
+  v_train_episodes: 100
+  q_train_episodes: 10
   dataset_drop_ratio: 0.6
   tree_num_q_s_a_calls: 50
   tree_max_depth: 10000

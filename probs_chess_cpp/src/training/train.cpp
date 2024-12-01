@@ -53,7 +53,7 @@ ProbsImpl::ProbsImpl(const ConfigParser& config_parser)
 }
 
 
-void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes) {
+void ProbsImpl::SelfPlayAndTrainV(UsageCounter& usage, const int v_train_episodes) {
     int wcnt = workers.size();
 
     vector<int> worker_games(wcnt, v_train_episodes / wcnt);
@@ -79,12 +79,14 @@ void ProbsImpl::SelfPlayAndTrainV(const int v_train_episodes) {
                 v_dataset.push_back(item);
         }
     }
+    usage.MarkCheckpoint("get V dataset");
 
     TrainV(config_parser, model_keeper.v_model, device, model_keeper.v_optimizer, v_dataset);
+    usage.MarkCheckpoint("train V");
 }
 
 
-void ProbsImpl::GetQDatasetAndTrain(const int q_train_episodes) {
+void ProbsImpl::GetQDatasetAndTrain(UsageCounter& usage, const int q_train_episodes) {
     int wcnt = workers.size();
 
     vector<int> worker_games(wcnt, q_train_episodes / wcnt);
@@ -108,8 +110,10 @@ void ProbsImpl::GetQDatasetAndTrain(const int q_train_episodes) {
                 q_dataset.push_back(item);
         }
     }
+    usage.MarkCheckpoint("get Q dataset");
 
     TrainQ(config_parser, model_keeper.q_model, device, model_keeper.q_optimizer, q_dataset);
+    usage.MarkCheckpoint("train Q");
 }
 
 
@@ -150,11 +154,16 @@ void ProbsImpl::GoTrain() {
     }
 
     for (int high_level_i = 0; high_level_i < n_high_level_iterations; high_level_i++) {
-        SelfPlayAndTrainV(v_train_episodes);
-        GetQDatasetAndTrain(q_train_episodes);
+        UsageCounter usage;
+
+        SelfPlayAndTrainV(usage, v_train_episodes);
+        GetQDatasetAndTrain(usage, q_train_episodes);
 
         model_keeper.SetEvalMode();
         model_keeper.SaveCheckpoint();
+        usage.MarkCheckpoint("save models");
+
+        usage.PrintStats();
     }
 
     // Shutdown workers

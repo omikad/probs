@@ -3,8 +3,8 @@ player1:
   # kind: "random"
   # kind: "one_step_lookahead"
   # kind: "two_step_lookahead"
-  # kind: "q_resnet_player"
-  kind: "v_resnet_player"      # this player uses V model for actions
+  kind: "q_resnet_player"
+  # kind: "v_resnet_player"      # this player uses V model for actions
   model:
     v:
       type: resnet
@@ -14,7 +14,7 @@ player1:
       type: resnet
       res_blocks: 3
       filters: 80
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241130-121758*'
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241201-165653*'
 
 player2:
   kind: "random"

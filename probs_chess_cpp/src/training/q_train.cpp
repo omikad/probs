@@ -288,6 +288,8 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 
 
 void TrainQ(const ConfigParser& config_parser, ResNet q_model, at::Device& device, torch::optim::AdamW& q_optimizer, QDataset& q_dataset) {
+    q_model->train();
+
     int dataset_size = q_dataset.size();
     cout << "[Train.Q] Train Q model on dataset with " << dataset_size << " rows";
 
