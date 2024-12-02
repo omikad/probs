@@ -55,7 +55,7 @@ struct QTrainNode {
 
 
 struct EnvExpandState {
-    EnvPlayer env;
+    PositionHistoryTree tree;
     int top_node;
     map<pair<float, int>, int> beam;        // (priority, node) -> node
     vector<QTrainNode> nodes;
@@ -63,12 +63,12 @@ struct EnvExpandState {
     int n_qsa_calls;
 
     EnvExpandState(string start_pos, int n_max_episode_steps)
-            : env(EnvPlayer(lczero::ChessBoard::kStartposFen, n_max_episode_steps)) {
+            : tree(PositionHistoryTree(lczero::ChessBoard::kStartposFen, n_max_episode_steps)) {
 
         // Root node:
         top_node = 0;
         beam.insert({{1000.0, 0}, 0});
-        nodes.push_back(QTrainNode(env.Tree().ToLczeroHistory(-1), 0));
+        nodes.push_back(QTrainNode(tree.ToLczeroHistory(-1), 0));
         expand_tree_size = 1;
         n_qsa_calls = 0;
     }
@@ -98,7 +98,7 @@ struct EnvExpandState {
             auto move = qnode.moves_estimation[mi].move;
             float score = qnode.moves_estimation[mi].score;
 
-            int kid_node = env.Tree().Append(node, move);
+            int kid_node = tree.Move(node, move);
 
             if (node_depth + 1 < max_depth) {
                 float kid_priority = node_depth == 0 ? 1000.0 : score;    // always expand first turn
@@ -107,7 +107,7 @@ struct EnvExpandState {
             }
 
             assert(kid_node == nodes.size());
-            nodes.push_back(QTrainNode(env.Tree().ToLczeroHistory(kid_node), node_depth + 1));
+            nodes.push_back(QTrainNode(tree.ToLczeroHistory(kid_node), node_depth + 1));
 
             nodes[node].AppendKid(kid_node, move, score);
 
@@ -171,7 +171,7 @@ struct EnvExpandState {
     }
 
     void Move(bool exploration_full_random, int exploration_num_first_moves) {
-        auto move = GetMoveWithExploration(nodes[top_node].moves, env.Tree().positions[top_node].GetGamePly(), exploration_full_random, exploration_num_first_moves);
+        auto move = GetMoveWithExploration(nodes[top_node].moves, tree.positions[top_node].GetGamePly(), exploration_full_random, exploration_num_first_moves);
 
         int new_top_node = nodes[top_node].FindKidByMove(move);
         assert(new_top_node > top_node);
@@ -191,7 +191,7 @@ struct EnvExpandState {
                 float priority = kvp.first.first;
                 int node = kvp.second;
                 if (new_tree_nodes_set.find(node) != new_tree_nodes_set.end()) {
-                    if (env.Tree().parents[node] == new_top_node)
+                    if (tree.parents[node] == new_top_node)
                         priority = 1000;
                     new_beam.insert({{priority, node}, node});
                 }
@@ -255,7 +255,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 // cout << 1 << endl;
             EnvExpandState* env = new EnvExpandState(lczero::ChessBoard::kStartposFen, n_max_episode_steps);
             envs.push_back(env);
-            trees.push_back(&envs.back()->env.Tree());
+            trees.push_back(&envs.back()->tree);
             game_idx++;
         }
 
@@ -268,7 +268,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                 int node = envs[ei]->PopTopPriorityNode();
                 nodes.push_back(node);
 
-                envs[ei]->nodes[node].ComputeValidMoves(envs[ei]->env.Tree().positions[node]);
+                envs[ei]->nodes[node].ComputeValidMoves(envs[ei]->tree.positions[node]);
                 qnodes.push_back(&(envs[ei]->nodes[node]));
             }
 // cout << 3 << endl;
@@ -300,7 +300,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 // cout << 5 << " dataset size " << rows.size() << endl;
                 }
 
-                auto game_result = envs[ei]->env.GameResult(envs[ei]->top_node);   // TODO: ComputeGameResult can reuse computed valid moves
+                auto game_result = envs[ei]->tree.GetGameResult(envs[ei]->top_node);   // TODO: ComputeGameResult can reuse computed valid moves
 
                 if (game_result == lczero::GameResult::UNDECIDED) {
 // cout << 6 << endl;

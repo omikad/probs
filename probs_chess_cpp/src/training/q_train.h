@@ -8,7 +8,6 @@
 #include "chess/position.h"
 #include "chess/policy_map.h"
 #include "infra/config_parser.h"
-#include "infra/env_player.h"
 #include "neural/encoder.h"
 #include "neural/network.h"
 #include "neural/torch_encoder.h"

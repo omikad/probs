@@ -12,12 +12,19 @@ namespace probs {
 
 class PositionHistoryTree {
     public:
-        PositionHistoryTree(const std::string& starting_fen);
-        PositionHistoryTree(const lczero::PositionHistory& lchistory);
+        PositionHistoryTree(const std::string& starting_fen, const int n_max_episode_steps);
+        // PositionHistoryTree(const lczero::PositionHistory& lchistory, const int n_max_episode_steps);
 
-        lczero::GameResult ComputeGameResult(const int node) const;
+        lczero::GameResult GetGameResult(const int node) const {
+            assert(node < (int)game_results.size());
+            return game_results[node >= 0 ? node : (game_results.size() - 1)];
+        }
 
-        const lczero::Position& Last() const {return positions.back();}
+        const lczero::Position& LastPosition() const {
+            assert(positions.size() > 0);
+            return positions.back();
+        }
+
         const int LastIndex() const {
             assert(positions.size() > 0);
             return positions.size() - 1;
@@ -26,7 +33,7 @@ class PositionHistoryTree {
         lczero::PositionHistory ToLczeroHistory(const int node) const;
 
         /// @brief create new node based on `node` with applied move `move`. Return new node index
-        int Append(const int node, lczero::Move move);
+        int Move(const int node, const lczero::Move move);
 
         /// @brief remove last node from the tree
         void PopLast();
@@ -34,14 +41,24 @@ class PositionHistoryTree {
         /// @brief node -> board position
         std::vector<lczero::Position> positions;
 
-        /// @brief node -> board hash
-        std::vector<uint64_t> hashes;
+        /// @brief node -> vector of node valid moves
+        std::vector<std::vector<lczero::Move>> node_valid_moves;
 
         /// @brief node -> parent node (or -1 for root)
         std::vector<int> parents;
 
     private:
+        /// @brief node -> board hash
+        std::vector<uint64_t> hashes;
+
+        /// @brief node -> game result
+        std::vector<lczero::GameResult> game_results;
+
+        int n_max_episode_steps;
+
         int ComputeLastMoveRepetitions(const int node, int* cycle_length) const;
+
+        void ComputeNodeGameResult(const int node);
 };
 
 }   // namespace probs

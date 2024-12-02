@@ -5,7 +5,7 @@ using namespace std;
 
 namespace probs {
 
-PositionHistoryTree::PositionHistoryTree(const string& starting_fen) {
+PositionHistoryTree::PositionHistoryTree(const string& starting_fen, const int n_max_episode_steps) : n_max_episode_steps(n_max_episode_steps) {
     lczero::ChessBoard starting_board;
     int no_capture_ply;
     int full_moves;
@@ -17,18 +17,21 @@ PositionHistoryTree::PositionHistoryTree(const string& starting_fen) {
     positions.push_back(root_position);
     hashes.push_back(starting_board.Hash());
     parents.push_back(-1);
+    node_valid_moves.push_back({});
+    game_results.push_back(lczero::GameResult::UNDECIDED);
+    ComputeNodeGameResult(0);
 }
 
 
-PositionHistoryTree::PositionHistoryTree(const lczero::PositionHistory& lchistory) {
-    for (int pi = 0; pi < lchistory.GetLength(); pi++) {
-        auto& position = lchistory.GetPositionAt(pi);
+// PositionHistoryTree::PositionHistoryTree(const lczero::PositionHistory& lchistory, const int n_max_episode_steps) : n_max_episode_steps(n_max_episode_steps) {
+//     for (int pi = 0; pi < lchistory.GetLength(); pi++) {
+//         auto& position = lchistory.GetPositionAt(pi);
 
-        positions.push_back(position);
-        hashes.push_back(position.GetBoard().Hash());
-        parents.push_back(pi - 1);
-    }
-}
+//         positions.push_back(position);
+//         hashes.push_back(position.GetBoard().Hash());
+//         parents.push_back(pi - 1);
+//     }
+// }
 
 
 lczero::PositionHistory PositionHistoryTree::ToLczeroHistory(const int node) const {
@@ -43,48 +46,58 @@ lczero::PositionHistory PositionHistoryTree::ToLczeroHistory(const int node) con
 }
 
 
-lczero::GameResult PositionHistoryTree::ComputeGameResult(const int node) const {
+void PositionHistoryTree::ComputeNodeGameResult(const int node) {
     auto& position = positions[node];
     const auto& board = position.GetBoard();
 
-    auto legal_moves = board.GenerateLegalMoves();
-    if (legal_moves.empty()) {
-        if (board.IsUnderCheck()) {
-            return position.IsBlackToMove() ? lczero::GameResult::WHITE_WON : lczero::GameResult::BLACK_WON;
-        }
-        return lczero::GameResult::DRAW;
+    node_valid_moves[node] = board.GenerateLegalMoves();
+
+    if (node_valid_moves[node].empty()) {
+        if (board.IsUnderCheck())
+            game_results[node] = position.IsBlackToMove() ? lczero::GameResult::WHITE_WON : lczero::GameResult::BLACK_WON;
+        else
+            game_results[node] = lczero::GameResult::DRAW;
+    }
+    else {
+        if (position.GetGamePly() >= n_max_episode_steps) game_results[node] = lczero::GameResult::DRAW;
+        else if (!board.HasMatingMaterial()) game_results[node] = lczero::GameResult::DRAW;
+        else if (position.GetRule50Ply() >= 100) game_results[node] = lczero::GameResult::DRAW;
+        else if (position.GetRepetitions() >= 2) game_results[node] = lczero::GameResult::DRAW;
     }
 
-    if (!board.HasMatingMaterial()) return lczero::GameResult::DRAW;
-    if (position.GetRule50Ply() >= 100) return lczero::GameResult::DRAW;
-    if (position.GetRepetitions() >= 2) return lczero::GameResult::DRAW;
-
     // Make game simpler to test NN training:
-    if (position.GetGamePly() >= 48) {
+    if (game_results[node] == lczero::GameResult::UNDECIDED && position.GetGamePly() >= 48) {
         int ours = board.ours().count();
         int theirs = board.theirs().count();
 
-        if (ours == theirs) return lczero::GameResult::UNDECIDED;
-        if (position.IsBlackToMove())
-            return ours > theirs ? lczero::GameResult::BLACK_WON : lczero::GameResult::WHITE_WON;
+        if (ours == theirs) game_results[node] = lczero::GameResult::UNDECIDED;
+        else if (position.IsBlackToMove())
+            game_results[node] = ours > theirs ? lczero::GameResult::BLACK_WON : lczero::GameResult::WHITE_WON;
         else
-            return ours > theirs ? lczero::GameResult::WHITE_WON : lczero::GameResult::BLACK_WON;
+            game_results[node] = ours > theirs ? lczero::GameResult::WHITE_WON : lczero::GameResult::BLACK_WON;
     }
-
-    return lczero::GameResult::UNDECIDED;
 };
 
 
-int PositionHistoryTree::Append(const int node, lczero::Move move) {
+int PositionHistoryTree::Move(const int node_, const lczero::Move move_) {
+    assert(node_ < (int)positions.size());
+    int node = node_ >= 0 ? node_ : (positions.size() - 1);
+
+    auto move = positions[node].GetBoard().GetModernMove(move_);
+
     int new_node = (int)positions.size();
 
     positions.push_back(lczero::Position(positions[node], move));
     hashes.push_back(positions.back().GetBoard().Hash());
     parents.push_back(node);
+    node_valid_moves.push_back({});
+    game_results.push_back(lczero::GameResult::UNDECIDED);
 
     int cycle_length;
     int repetitions = ComputeLastMoveRepetitions(new_node, &cycle_length);
     positions.back().SetRepetitions(repetitions, cycle_length);
+
+    ComputeNodeGameResult(new_node);
 
     return new_node;
 }
@@ -98,6 +111,8 @@ void PositionHistoryTree::PopLast() {
     positions.pop_back();
     hashes.pop_back();
     parents.pop_back();
+    node_valid_moves.pop_back();
+    game_results.pop_back();
 }
 
 

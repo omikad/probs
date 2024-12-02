@@ -6,8 +6,8 @@
 
 #include "chess/board.h"
 #include "chess/position.h"
+#include "chess/game_tree.h"
 #include "utils/exception.h"
-#include "infra/env_player.h"
 
 using namespace std;
 
@@ -18,31 +18,31 @@ namespace python {
 class ChessEnv {
     public:
         ChessEnv(const optional<string> start_fen, optional<int> max_episode_steps) :
-                env_player(EnvPlayer(
+                game_tree(
                     start_fen.value_or(lczero::ChessBoard::kStartposFen),
-                    max_episode_steps.has_value() && max_episode_steps.value() > 0 ? max_episode_steps.value() : 450)) {
+                    max_episode_steps.has_value() && max_episode_steps.value() > 0 ? max_episode_steps.value() : 450) {
         }
 
         void move(const optional<string> move_str) {
             if (!move_str.has_value())
                 return;
-            lczero::Move move(move_str.value(), env_player.LastPosition().IsBlackToMove());
-            env_player.Move(move);
+            lczero::Move move(move_str.value(), game_tree.LastPosition().IsBlackToMove());
+            game_tree.Move(-1, move);
         }
 
         string game_state() {
-            if (env_player.GameResult() == lczero::GameResult::WHITE_WON) return "white_won";
-            if (env_player.GameResult() == lczero::GameResult::BLACK_WON) return "black_won";
-            if (env_player.GameResult() == lczero::GameResult::DRAW) return "draw";
+            if (game_tree.GetGameResult(-1) == lczero::GameResult::WHITE_WON) return "white_won";
+            if (game_tree.GetGameResult(-1) == lczero::GameResult::BLACK_WON) return "black_won";
+            if (game_tree.GetGameResult(-1) == lczero::GameResult::DRAW) return "draw";
             return "undecided";
         }
 
         vector<string> legal_moves() const {
-            auto ms = env_player.LastChessBoard().GenerateLegalMoves();
-            bool is_black = env_player.LastPosition().IsBlackToMove();
+            auto ms = game_tree.node_valid_moves.back();
+            bool is_black = game_tree.LastPosition().IsBlackToMove();
             vector<string> result;
                 for (auto m : ms) {
-                    m = env_player.LastChessBoard().GetLegacyMove(m);
+                    m = game_tree.LastPosition().GetBoard().GetLegacyMove(m);
                     if (is_black) m.Mirror();
                     result.push_back(m.as_string());
                 }
@@ -50,7 +50,7 @@ class ChessEnv {
         }
 
         vector<int> policy_indices() const {
-            auto ms = env_player.LastChessBoard().GenerateLegalMoves();
+            auto ms = game_tree.node_valid_moves.back();
             vector<int> result;
             for (auto m : ms) {
             result.push_back(m.as_nn_index(/* transform= */ 0));
@@ -59,13 +59,13 @@ class ChessEnv {
         }
 
         string as_string() const {
-            bool is_black = env_player.LastPosition().IsBlackToMove();
-            return (is_black ? env_player.LastPosition().GetThemBoard() : env_player.LastPosition().GetBoard())
+            bool is_black = game_tree.LastPosition().IsBlackToMove();
+            return (is_black ? game_tree.LastPosition().GetThemBoard() : game_tree.LastPosition().GetBoard())
                 .DebugString();
         }
 
     private:
-        EnvPlayer env_player;
+        PositionHistoryTree game_tree;
 };
 
 }  // namespace python

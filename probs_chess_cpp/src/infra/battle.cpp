@@ -42,24 +42,24 @@ void Battle::GoBattle(const ConfigParser& config_parser) {
     BattleInfo battle_info;
 
     for (int gi = 0; gi < evaluate_n_games; gi++) {
-        EnvPlayer env_player(starting_fen, n_max_episode_steps);
+        PositionHistoryTree tree(starting_fen, n_max_episode_steps);
 
-        int start_player_shift = env_player.LastPosition().IsBlackToMove() ? 1 : 0;
+        int start_player_shift = tree.LastPosition().IsBlackToMove() ? 1 : 0;
 
-        while (env_player.GameResult() == lczero::GameResult::UNDECIDED) {
-            int ply = env_player.Ply();
+        while (tree.GetGameResult(-1) == lczero::GameResult::UNDECIDED) {
+            int ply = tree.LastPosition().GetGamePly();
 
             // cout << "Board at step " << ply << ":\n" << curr_board.DebugString() << endl;
 
-            vector<PositionHistoryTree*> trees = { &env_player.Tree() };
+            vector<PositionHistoryTree*> trees = { &tree };
             auto move = ((ply + gi) % 2 == 0 ? player1 : player2)->GetActions(trees)[0];
             
             // cout << "PLY " << ply << " " << "Player " << ((ply + gi) % 2 == 0 ? player1 : player2)->GetName() << " selected move " << move.as_string() << " " << (int)env_player.GameResult() << endl;
 
-            env_player.Move(move);
+            tree.Move(-1, move);
         }
 
-        auto game_result = env_player.GameResult();
+        auto game_result = tree.GetGameResult(-1);
         if ((gi + start_player_shift) % 2 == 0) {   // player1 is white:
             if (game_result == lczero::GameResult::WHITE_WON)
                 battle_info.results[0][0]++;

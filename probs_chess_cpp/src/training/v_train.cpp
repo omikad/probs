@@ -25,39 +25,38 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
     int game_idx = 0;
     VDataset rows;
 
-    vector<shared_ptr<EnvPlayer>> envs;
-    vector<vector<int>> env_rows;
+    vector<PositionHistoryTree*> trees;
+    vector<vector<int>> tree_rows;
 
-    while (game_idx < n_games || envs.size() > 0) {
+    while (game_idx < n_games || trees.size() > 0) {
 
-        if (envs.size() < batch_size && game_idx < n_games) {
-            envs.push_back(make_shared<EnvPlayer>(EnvPlayer(lczero::ChessBoard::kStartposFen, n_max_episode_steps)));
-            env_rows.push_back({});
+        if (trees.size() < batch_size && game_idx < n_games) {
+            PositionHistoryTree* tree = new PositionHistoryTree(lczero::ChessBoard::kStartposFen, n_max_episode_steps);
+            trees.push_back(tree);
+            tree_rows.push_back({});
             game_idx++;
         }
 
         else {
-            vector<PositionHistoryTree*> trees;
             vector<int> nodes;
-            for (int ei = 0; ei < envs.size(); ei++) {
-                trees.push_back(&envs[ei]->Tree());
-                nodes.push_back(envs[ei]->Tree().LastIndex());
+            for (int ei = 0; ei < trees.size(); ei++) {
+                nodes.push_back(trees[ei]->LastIndex());
             }
             auto encoded_batch = GetQModelEstimation(trees, nodes, q_model, device);
 
-            for (int ei = envs.size() - 1; ei >= 0; ei--) {
+            for (int ei = trees.size() - 1; ei >= 0; ei--) {
 
                 if (rand() % 1000000 >= dataset_drop_ratio * 1000000) {
-                    float is_row_black = envs[ei]->Tree().Last().IsBlackToMove() ? 1 : -1;
-                    env_rows[ei].push_back(rows.size());
+                    float is_row_black = trees[ei]->LastPosition().IsBlackToMove() ? 1 : -1;
+                    tree_rows[ei].push_back(rows.size());
                     rows.push_back({encoded_batch->planes[ei], is_row_black});
                 }
 
-                auto game_result = envs[ei]->GameResult();
+                auto game_result = trees[ei]->GetGameResult(-1);
 
                 if (game_result == lczero::GameResult::UNDECIDED) {
-                    auto move = GetMoveWithExploration(encoded_batch->moves_estimation[ei], envs[ei]->LastPosition().GetGamePly(), exploration_full_random, exploration_num_first_moves);
-                    envs[ei]->Move(move);
+                    auto move = GetMoveWithExploration(encoded_batch->moves_estimation[ei], trees[ei]->LastPosition().GetGamePly(), exploration_full_random, exploration_num_first_moves);
+                    trees[ei]->Move(-1, move);
                 }
                 else {
                     float black_score =
@@ -65,30 +64,32 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
                         : game_result == lczero::GameResult::BLACK_WON ? 1
                         : -1;
 
-                    for (int row_idx : env_rows[ei]) {
+                    for (int row_idx : tree_rows[ei]) {
                         float is_row_black = rows[row_idx].second;
                         rows[row_idx].second = is_row_black * black_score;
                     }
 
                     // cout << "env outcome=" << (int)game_result << endl;
-                    // cout << "env rows.size()=" << env_rows[ei].size() << endl;
-                    // cout << "env size=" << envs[ei]->Tree().positions.size() << endl;
+                    // cout << "env rows.size()=" << tree_rows[ei].size() << endl;
+                    // cout << "env size=" << trees[ei]->positions.size() << endl;
                     // cout << "env rows scores:";
-                    // for (int ri : env_rows[ei])
+                    // for (int ri : tree_rows[ei])
                     //     cout << " " << rows[ri].second;
                     // cout << endl;
 
-                    if (ei < envs.size() - 1) {
-                        swap(envs[ei], envs[envs.size() - 1]);
-                        swap(env_rows[ei], env_rows[env_rows.size() - 1]);
+                    if (ei < trees.size() - 1) {
+                        swap(trees[ei], trees[trees.size() - 1]);
+                        swap(tree_rows[ei], tree_rows[tree_rows.size() - 1]);
                     }
 
-                    envs.pop_back();
-                    env_rows.pop_back();
+                    delete trees.back();
+                    trees.pop_back();
+                    tree_rows.pop_back();
                 }
             }
         }
     }
+    assert(trees.size() == 0);
 
     return rows;
 }

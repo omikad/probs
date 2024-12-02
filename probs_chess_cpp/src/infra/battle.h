@@ -2,13 +2,13 @@
 
 #include <iostream>
 
+#include "chess/game_tree.h"
+#include "chess/position.h"
+#include "chess/board.h"
 #include "infra/config_parser.h"
 #include "infra/player.h"
 #include "utils/exception.h"
 #include "utils/callbacks.h"
-#include "chess/board.h"
-#include "chess/position.h"
-#include "infra/env_player.h"
 
 
 namespace probs {

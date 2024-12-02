@@ -42,9 +42,6 @@ int main(int argc, char* argv[]) {
             probs::ProbsImpl probs(config);
             probs.GoTrain();
         }
-        else if (command == "tests_PositionHistoryTree_eq_PositionHistory") {
-            probs::PositionHistoryTree_eq_PositionHistory();
-        }
         else if (command == "test_V_predict_self_play") {
             probs::V_predict_self_play(config);
         }

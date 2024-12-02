@@ -9,7 +9,7 @@ vector<lczero::Move> RandomPlayer::GetActions(vector<PositionHistoryTree*>& hist
     vector<lczero::Move> picked_moves(history.size());
 
     for(int hi = 0; hi < history.size(); hi++) {
-        const auto& board = history[hi]->Last().GetBoard();
+        const auto& board = history[hi]->LastPosition().GetBoard();
 
         auto legal_moves = board.GenerateLegalMoves();
         if (legal_moves.size() == 0)
@@ -26,17 +26,16 @@ vector<lczero::Move> RandomPlayer::GetActions(vector<PositionHistoryTree*>& hist
 
 vector<lczero::Move> NStepLookaheadPlayer::GetActions(vector<PositionHistoryTree*>& history) {
     int max_depth = this->depth;
-
     auto dfs = [&](auto& self, PositionHistoryTree& tree, const int node, const int depth)->vector<pair<lczero::Move, int>> {
         vector<pair<lczero::Move, int>> result;
 
         bool is_black = tree.positions[node].IsBlackToMove();
 
-        for (auto move : tree.positions[node].GetBoard().GenerateLegalMoves()) {
+        for (auto move : tree.node_valid_moves[node]) {
 
-            int kid_node = tree.Append(node, move);
+            int kid_node = tree.Move(node, move);
 
-            lczero::GameResult game_result = tree.ComputeGameResult(kid_node);
+            lczero::GameResult game_result = tree.GetGameResult(kid_node);
 
             if (game_result != lczero::GameResult::UNDECIDED) {
                 int score = (game_result == lczero::GameResult::DRAW) ? 0
@@ -118,10 +117,10 @@ vector<lczero::Move> VResnetPlayer::GetActions(vector<PositionHistoryTree*>& his
 
         int last_node_idx = history[bi]->LastIndex();
 
-        for (auto move: history[bi]->Last().GetBoard().GenerateLegalMoves()) {
+        for (auto move: history[bi]->node_valid_moves[last_node_idx]) {
             moves.push_back(move);
 
-            int new_node = history[bi]->Append(last_node_idx, move);
+            int new_node = history[bi]->Move(last_node_idx, move);
 
             int transform_out;
             input_planes.push_back(Encode(history[bi]->ToLczeroHistory(new_node), &transform_out));

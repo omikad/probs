@@ -6,8 +6,8 @@
 #include <torch/torch.h>
 
 #include "chess/position.h"
+#include "chess/game_tree.h"
 #include "infra/config_parser.h"
-#include "infra/env_player.h"
 #include "neural/encoder.h"
 #include "neural/network.h"
 #include "neural/torch_encoder.h"
