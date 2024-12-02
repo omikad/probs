@@ -15,34 +15,34 @@ QDatasetRow::QDatasetRow(const EncodedPositionBatch& node_encoded, const std::ve
 
 
 struct QTrainNode {
-    vector<int> kids;
+        vector<int> kids;
     vector<MoveEstimation> moves;
-    int depth;          // depth from top node
+        int depth;          // depth from top node
 
     QTrainNode(int depth) : depth(depth) {}
 
     void AppendKid(int kid, lczero::Move move, float score) {
         kids.push_back(kid);
         moves.push_back({move, score});
-    }
+        }
 
-    int FindKidByMove(const lczero::Move move) const {
+        int FindKidByMove(const lczero::Move move) const {
         assert(kids.size() == moves.size());
-        for (int ki = 0; ki < kids.size(); ki++)
+            for (int ki = 0; ki < kids.size(); ki++)
             if (moves[ki].move == move)
-                return kids[ki];
-        return -1;
-    }
+                    return kids[ki];
+            return -1;
+        }
 
-    bool IsLeaf() const {
-        return kids.size() == 0;
-    }
+        bool IsLeaf() const {
+            return kids.size() == 0;
+        }
 
-    void ShowKidsInfo() const {
+        void ShowKidsInfo() const {
         assert(kids.size() == moves.size());
-        for (int ki = 0; ki < kids.size(); ki++)
+            for (int ki = 0; ki < kids.size(); ki++)
             cout << "     Kid=" << kids[ki] << "; move=" << moves[ki].move.as_string() << "; " << moves[ki].score << endl;
-    }
+        }
 };
 
 
@@ -193,8 +193,13 @@ struct EnvExpandState {
         }
 
         top_node = new_top_node;
+
         expand_tree_size = new_tree_nodes_arr.size();
+
         n_qsa_calls = 0;
+        // for (int node : new_tree_nodes_arr)
+        //     if (!nodes[node].IsLeaf())
+        //         n_qsa_calls++;
     }
 
     void ShowStructure() {
@@ -231,25 +236,29 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
     int tree_max_depth = config_parser.GetInt("training.tree_max_depth");
 
     int game_idx = 0;
+    map<string, vector<long long>> stats;
     QDataset rows;
 
-    vector<shared_ptr<EnvExpandState>> envs;
+    vector<EnvExpandState*> envs;
+    vector<PositionHistoryTree*> trees;
 
     while (game_idx < n_games || envs.size() > 0) {
 
         if (envs.size() < batch_size && game_idx < n_games) {
-            envs.push_back(make_shared<EnvExpandState>(EnvExpandState(lczero::ChessBoard::kStartposFen, n_max_episode_steps)));
+            EnvExpandState* env = new EnvExpandState(lczero::ChessBoard::kStartposFen, n_max_episode_steps);
+            envs.push_back(env);
+            trees.push_back(&envs.back()->env.Tree());
             game_idx++;
         }
 
         else {
-
-            vector<PositionHistoryTree*> trees;
             vector<int> nodes;
+
             for (int ei = 0; ei < envs.size(); ei++) {
-                trees.push_back(&envs[ei]->env.Tree());
-                nodes.push_back(envs[ei]->PopTopPriorityNode());
+                int node = envs[ei]->PopTopPriorityNode();
+                nodes.push_back(node);
             }
+
             auto encoded_batch = GetQModelEstimation(trees, nodes, q_model, device);
 
             for (int ei = 0; ei < envs.size(); ei++)
@@ -275,13 +284,28 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                     envs[ei]->Move(exploration_full_random, exploration_num_first_moves);
                 }
                 else {
-                    if (ei < envs.size() - 1)
+                    stats["tree_size"].push_back(envs[ei]->nodes.size());
+
+                    if (ei < envs.size() - 1) {
                         swap(envs[ei], envs[envs.size() - 1]);
+                        swap(trees[ei], trees[trees.size() - 1]);
+                    }
                     envs.pop_back();
+                    trees.pop_back();
                 }
             }
         }
     }
+
+    for (auto& kvp : stats) {
+        long long cnt = kvp.second.size();
+        long long sm = 0; for (auto val : kvp.second) sm += val;
+        long long mx = 0; for (auto val : kvp.second) mx = max(mx, val);
+        cout << "Stat " << kvp.first << ": count=" << cnt << "; mean=" << (double)sm / cnt << "; max=" << mx << endl;
+    }
+
+    for (EnvExpandState* env : envs)
+        delete env;
 
     return rows;
 }
@@ -291,7 +315,7 @@ void TrainQ(const ConfigParser& config_parser, ResNet q_model, at::Device& devic
     q_model->train();
 
     int dataset_size = q_dataset.size();
-    cout << "[Train.Q] Train Q model on dataset with " << dataset_size << " rows";
+    cout << "[Train.Q] Train Q model on dataset with " << dataset_size << " rows" << endl;
 
     int batch_size = config_parser.GetInt("training.batch_size");
 

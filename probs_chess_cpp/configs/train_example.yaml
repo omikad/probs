@@ -12,9 +12,9 @@ model:
     filters: 80
 training:
   n_high_level_iterations: 1
-  v_train_episodes: 100
+  v_train_episodes: 1000
   q_train_episodes: 10
-  dataset_drop_ratio: 0.6
+  dataset_drop_ratio: 0.5
   tree_num_q_s_a_calls: 50
   tree_max_depth: 10000
   # exploration_full_random: 1      # pick random moves during V training (for debugging)

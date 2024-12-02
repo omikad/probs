@@ -32,7 +32,7 @@ PositionHistoryTree::PositionHistoryTree(const lczero::PositionHistory& lchistor
 
 
 lczero::PositionHistory PositionHistoryTree::ToLczeroHistory(const int node) const {
-    int runnode = node;
+    int runnode = node >= 0 ? node : LastIndex();
     lczero::PositionHistory lchistory;
     while (runnode >= 0) {
         lchistory.AppendDontCompute__(positions[runnode]);
@@ -60,7 +60,7 @@ lczero::GameResult PositionHistoryTree::ComputeGameResult(const int node) const 
     if (position.GetRepetitions() >= 2) return lczero::GameResult::DRAW;
 
     // Make game simpler to test NN training:
-    if (position.GetGamePly() >= 200) {
+    if (position.GetGamePly() >= 48) {
         int ours = board.ours().count();
         int theirs = board.theirs().count();
 

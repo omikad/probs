@@ -157,6 +157,8 @@ void ProbsImpl::GoTrain() {
         UsageCounter usage;
 
         SelfPlayAndTrainV(usage, v_train_episodes);
+
+        model_keeper.SetEvalMode();
         GetQDatasetAndTrain(usage, q_train_episodes);
 
         model_keeper.SetEvalMode();
