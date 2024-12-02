@@ -24,8 +24,6 @@ struct QDatasetRow {
     lczero::InputPlanes input_planes;
     int transform;
     std::vector<MoveEstimation> target;
-
-    QDatasetRow(const EncodedPositionBatch& node_encoded, const std::vector<MoveEstimation>& moves_estimation);
 };
 
 using QDataset = std::vector<QDatasetRow>;

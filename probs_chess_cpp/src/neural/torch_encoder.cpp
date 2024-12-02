@@ -39,40 +39,6 @@ lczero::InputPlanes Encode(const lczero::PositionHistory& lchistory, int* transf
 }
 
 
-template<typename TNode>
-void GetQModelEstimation_Nodes(vector<TNode>& result, ResNet q_model, const at::Device& device) {
-    int batch_size = result.size();
-
-    torch::Tensor input = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
-
-    for (int bi = 0; bi < batch_size; bi++)
-        for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
-            const auto& plane = result[bi].input_planes[pi];
-            for (auto bit : lczero::IterateBits(plane.mask))
-                input[bi][pi][bit / 8][bit % 8] = plane.value;
-        }
-
-    input = input.to(device);
-    torch::Tensor q_values = q_model->forward(input);
-    q_values = q_values.to(torch::kCPU);
-
-    for (int bi = 0; bi < batch_size; bi++) {
-        for (int mi = 0; mi < result[bi].moves_estimation.size(); mi++) {
-            auto move = result[bi].moves_estimation[mi].move;
-            int move_idx = move.as_nn_index(result[bi].transform);
-            int policy_idx = move_to_policy_idx_map[move_idx];
-            int displacement = policy_idx / 64;
-            int square = policy_idx % 64;
-            int row = square / 8;
-            int col = square % 8;
-            float score = q_values[bi][displacement][row][col].item<float>();
-
-            result[bi].moves_estimation[mi].score = score;
-        }
-    }
-}
-
-
 shared_ptr<EncodedPositionBatch> GetQModelEstimation(const vector<PositionHistoryTree*>& trees, const vector<int>& nodes, ResNet q_model, const at::Device& device) {
     assert(trees.size() == nodes.size());
     int batch_size = nodes.size();
