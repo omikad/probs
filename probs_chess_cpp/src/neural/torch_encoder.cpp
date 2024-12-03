@@ -39,12 +39,22 @@ lczero::InputPlanes Encode(const lczero::PositionHistory& lchistory, int* transf
 }
 
 
+void FillInputTensor(torch::TensorAccessor<float, 4>& input_accessor, const int batch_index, const lczero::InputPlanes& input_planes) {
+    for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
+        const auto& plane = input_planes[pi];
+        for (auto bit : lczero::IterateBits(plane.mask))
+            input_accessor[batch_index][pi][bit / 8][bit % 8] = plane.value;
+    }
+}
+
+
 shared_ptr<EncodedPositionBatch> GetQModelEstimation(const vector<PositionHistoryTree*>& trees, const vector<int>& nodes, ResNet q_model, const at::Device& device) {
     assert(trees.size() == nodes.size());
     int batch_size = nodes.size();
 
     EncodedPositionBatch result;
     torch::Tensor input = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
+    auto input_accessor = input.accessor<float, 4>();
 
     for (int bi = 0; bi < batch_size; bi++) {
         lczero::PositionHistory lchistory = trees[bi]->ToLczeroHistory(nodes[bi]);
@@ -55,12 +65,7 @@ shared_ptr<EncodedPositionBatch> GetQModelEstimation(const vector<PositionHistor
 
         result.transforms.push_back(transform_out);
 
-        for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
-            const auto& plane = result.planes.back()[pi];
-            for (auto bit : lczero::IterateBits(plane.mask)) {
-                input[bi][pi][bit / 8][bit % 8] = plane.value;
-            }
-        }
+        FillInputTensor(input_accessor, bi, result.planes.back());
     }
 
     input = input.to(device);
@@ -85,13 +90,5 @@ shared_ptr<EncodedPositionBatch> GetQModelEstimation(const vector<PositionHistor
 
     return make_shared<EncodedPositionBatch>(result);
 }
-
-
-shared_ptr<EncodedPositionBatch> GetQModelEstimation_OneNode(PositionHistoryTree& tree, const int node, ResNet q_model, const at::Device& device) {
-    vector<PositionHistoryTree*> trees = {&tree};
-    vector<int> nodes = {node};
-    return GetQModelEstimation(trees, nodes, q_model, device);
-}
-
 
 }  // namespace probs

@@ -1,6 +1,7 @@
 #include <optional>
 
 #include "training/q_train.h"
+#include "utils/usage_counter.h"
 
 using namespace std;
 
@@ -164,15 +165,12 @@ struct EnvExpandState {
             int end = min((int)to_compute_nodes.size(), start + batch_size);
 
             torch::Tensor input = torch::zeros({end - start, lczero::kInputPlanes, 8, 8});
+            auto input_accessor = input.accessor<float, 4>();
             for (int bi = 0; bi < end - start; bi++)
-                for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
-                    const auto& plane = nodes[to_compute_nodes[start + bi]].input_planes[pi];
-                    for (auto bit : lczero::IterateBits(plane.mask))
-                        input[bi][pi][bit / 8][bit % 8] = plane.value;
-                }
+                FillInputTensor(input_accessor, bi, nodes[to_compute_nodes[start + bi]].input_planes);
+
             input = input.to(device);
             torch::Tensor predictions = v_model->forward(input);
-            predictions = predictions.contiguous();
             predictions = predictions.to(torch::kCPU);
 
             for (int bi = 0; bi < end - start; bi++) {
@@ -279,6 +277,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
     int game_idx = 0;
     map<string, vector<long long>> stats;
     QDataset rows;
+    UsageCounter usage;
 
     vector<EnvExpandState*> envs;
 
@@ -290,11 +289,12 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
             envs.push_back(env);
             game_idx++;
         }
-
         else {
 // cout << 2 << endl;
             vector<int> nodes;
             vector<QTrainNode*> qnodes;
+
+            usage.MarkCheckpoint("1. Init");
 
             for (int ei = 0; ei < envs.size(); ei++) {
                 int node = envs[ei]->PopTopPriorityNode();
@@ -307,7 +307,11 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
             }
 // cout << 3 << endl;
 
+            usage.MarkCheckpoint("2. Pop nodes");
+
             GetQModelEstimation_Nodes(qnodes, q_model, device);
+
+            usage.MarkCheckpoint("3. Q estimate");
 
             for (auto& qnode : qnodes) {
                 assert(qnode->state == NodeState::FRONTIER_MOVES_COMPUTED);
@@ -320,6 +324,8 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                 envs[ei]->ExpandNodeAfterQComputed(nodes[ei], tree_max_depth);
 // cout << 5 << endl;
 
+            usage.MarkCheckpoint("4. Expand");
+
             for (int ei = envs.size() - 1; ei >= 0; ei--) {
 // cout << 6 << endl;
                 envs[ei]->n_qsa_calls++;
@@ -328,7 +334,11 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                     continue;
 // cout << 7 << " dataset size " << rows.size() << endl;
 
+                usage.MarkCheckpoint("5. Pre compute V");
+
                 envs[ei]->ComputeTreeValues(v_model, device, batch_size);
+
+                usage.MarkCheckpoint("6. Compute V");
 
                 while (true) {
 // cout << 8 << endl;
@@ -372,10 +382,14 @@ cout << "Env finished, dataset size " << rows.size() << endl;
 
                     // envs[ei]->ComputeValidMoves(envs[ei]->tree.positions[envs[ei]->top_node]);
                 }
+
+                usage.MarkCheckpoint("7. Finalizing");
             }
         }
     }
     assert(envs.size() == 0);
+
+    usage.PrintStats();
 
     for (auto& kvp : stats) {
         long long cnt = kvp.second.size();

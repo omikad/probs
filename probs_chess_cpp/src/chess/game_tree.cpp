@@ -55,16 +55,16 @@ void PositionHistoryTree::ComputeNodeGameResult(const int node) {
     }
 
     // Make game simpler to test NN training:
-    if (game_results[node] == lczero::GameResult::UNDECIDED && position.GetGamePly() >= 48) {
-        int ours = board.ours().count();
-        int theirs = board.theirs().count();
+    // if (game_results[node] == lczero::GameResult::UNDECIDED && position.GetGamePly() >= 48) {
+    //     int ours = board.ours().count();
+    //     int theirs = board.theirs().count();
 
-        if (ours == theirs) game_results[node] = lczero::GameResult::UNDECIDED;
-        else if (position.IsBlackToMove())
-            game_results[node] = ours > theirs ? lczero::GameResult::BLACK_WON : lczero::GameResult::WHITE_WON;
-        else
-            game_results[node] = ours > theirs ? lczero::GameResult::WHITE_WON : lczero::GameResult::BLACK_WON;
-    }
+    //     if (ours == theirs) game_results[node] = lczero::GameResult::UNDECIDED;
+    //     else if (position.IsBlackToMove())
+    //         game_results[node] = ours > theirs ? lczero::GameResult::BLACK_WON : lczero::GameResult::WHITE_WON;
+    //     else
+    //         game_results[node] = ours > theirs ? lczero::GameResult::WHITE_WON : lczero::GameResult::BLACK_WON;
+    // }
 };
 
 

@@ -29,10 +29,10 @@ struct EncodedPositionBatch {
 lczero::InputPlanes Encode(const lczero::PositionHistory& lchistory, int* transform_out);
 
 
+void FillInputTensor(torch::TensorAccessor<float, 4>& input_accessor, const int batch_index, const lczero::InputPlanes& input_planes);
+
+
 std::shared_ptr<EncodedPositionBatch> GetQModelEstimation(const std::vector<PositionHistoryTree*>& trees, const std::vector<int>& nodes, ResNet q_model, const at::Device& device);
-
-
-std::shared_ptr<EncodedPositionBatch> GetQModelEstimation_OneNode(PositionHistoryTree& tree, const int node, ResNet q_model, const at::Device& device);
 
 
 template<typename TNode>
@@ -40,13 +40,10 @@ void GetQModelEstimation_Nodes(std::vector<TNode*>& result, ResNet q_model, cons
     int batch_size = result.size();
 
     torch::Tensor input = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
+    auto input_accessor = input.accessor<float, 4>();
 
     for (int bi = 0; bi < batch_size; bi++)
-        for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
-            const auto& plane = result[bi]->input_planes[pi];
-            for (auto bit : lczero::IterateBits(plane.mask))
-                input[bi][pi][bit / 8][bit % 8] = plane.value;
-        }
+        FillInputTensor(input_accessor, bi, result[bi]->input_planes);
 
     input = input.to(device);
     torch::Tensor q_values = q_model->forward(input);
