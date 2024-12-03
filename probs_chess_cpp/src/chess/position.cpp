@@ -136,7 +136,6 @@ PositionHistory::PositionHistory(const std::string& starting_fen) {
 void PositionHistory::AppendDontCompute__(const Position& position) {
   positions_.push_back(position);
 }
-
 void PositionHistory::ReversePositions__() {
   std::reverse(begin(positions_), end(positions_));
 }

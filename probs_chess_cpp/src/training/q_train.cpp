@@ -111,11 +111,17 @@ struct EnvExpandState {
         assert(nodes[node].moves.size() == 0);
         assert(nodes[node].kids.size() == 0);
 
+        lczero::PositionHistory parent_history = tree.ToLczeroHistory(node);
+
         for (auto [move, score] : nodes[node].moves_estimation) {
             int kid_node = tree.Move(node, move);
 
+            parent_history.AppendDontCompute__(tree.positions[kid_node]);
+
             assert(kid_node == nodes.size());
-            nodes.emplace_back(tree.ToLczeroHistory(kid_node), node_depth + 1);
+            nodes.emplace_back(parent_history, node_depth + 1);
+
+            parent_history.Pop();
 
             auto kid_result = tree.GetGameResult(kid_node);
             if (kid_result != lczero::GameResult::UNDECIDED) {
@@ -172,9 +178,10 @@ struct EnvExpandState {
             input = input.to(device);
             torch::Tensor predictions = v_model->forward(input);
             predictions = predictions.to(torch::kCPU);
+            auto pred_accessor = predictions.accessor<float, 2>();
 
             for (int bi = 0; bi < end - start; bi++) {
-                float predicted_value = predictions[bi][0].item<float>();
+                float predicted_value = pred_accessor[bi][0];
 
                 leaf_values[to_compute_nodes[bi + start]] = predicted_value;
                 nodes[to_compute_nodes[bi + start]].v_estimation = predicted_value;

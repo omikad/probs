@@ -48,6 +48,8 @@ void GetQModelEstimation_Nodes(std::vector<TNode*>& result, ResNet q_model, cons
     input = input.to(device);
     torch::Tensor q_values = q_model->forward(input);
     q_values = q_values.to(torch::kCPU);
+    auto q_values_accessor = q_values.accessor<float, 4>();
+
 
     for (int bi = 0; bi < batch_size; bi++) {
         for (int mi = 0; mi < result[bi]->moves_estimation.size(); mi++) {
@@ -58,7 +60,8 @@ void GetQModelEstimation_Nodes(std::vector<TNode*>& result, ResNet q_model, cons
             int square = policy_idx % 64;
             int row = square / 8;
             int col = square % 8;
-            float score = q_values[bi][displacement][row][col].item<float>();
+            // float score = q_values[bi][displacement][row][col].item<float>();
+            float score = q_values_accessor[bi][displacement][row][col];
 
             result[bi]->moves_estimation[mi].score = score;
         }

@@ -39,9 +39,9 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
 
         else {
             vector<int> nodes;
-            for (int ei = 0; ei < trees.size(); ei++) {
+            for (int ei = 0; ei < trees.size(); ei++)
                 nodes.push_back(trees[ei]->LastIndex());
-            }
+
             auto encoded_batch = GetQModelEstimation(trees, nodes, q_model, device);
 
             for (int ei = trees.size() - 1; ei >= 0; ei--) {

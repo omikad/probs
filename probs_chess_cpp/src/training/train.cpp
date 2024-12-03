@@ -22,7 +22,7 @@ void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQu
             if (!command) break; // Exit signal
 
             if (auto command_self_play = dynamic_pointer_cast<QueueCommand_SelfPlay>(command)) {
-                // cout << "[WORKER " << thread_id << "] Got command self play " << command_self_play->n_games << " games. Device = " << impl.device << endl;
+                cout << "[WORKER " << thread_id << "] Got command self play " << command_self_play->n_games << " games. Device = " << impl.device << endl;
                 auto rows = SelfPlay(impl.model_keeper.q_model, impl.device, impl.config_parser, command_self_play->n_games);
                 resultsQueue.enqueue(make_shared<QueueResponse_SelfPlay>(rows));
             } else if (auto command_get_q = dynamic_pointer_cast<QueueCommand_GetQDataset>(command)) {
