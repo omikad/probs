@@ -23,17 +23,6 @@ PositionHistoryTree::PositionHistoryTree(const string& starting_fen, const int n
 }
 
 
-// PositionHistoryTree::PositionHistoryTree(const lczero::PositionHistory& lchistory, const int n_max_episode_steps) : n_max_episode_steps(n_max_episode_steps) {
-//     for (int pi = 0; pi < lchistory.GetLength(); pi++) {
-//         auto& position = lchistory.GetPositionAt(pi);
-
-//         positions.push_back(position);
-//         hashes.push_back(position.GetBoard().Hash());
-//         parents.push_back(pi - 1);
-//     }
-// }
-
-
 lczero::PositionHistory PositionHistoryTree::ToLczeroHistory(const int node) const {
     int runnode = node >= 0 ? node : LastIndex();
     lczero::PositionHistory lchistory;

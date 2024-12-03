@@ -102,6 +102,7 @@ void ProbsImpl::GetQDatasetAndTrain(UsageCounter& usage, const int q_train_episo
     QDataset q_dataset;
 
     for (int wi = 0; wi < wcnt; wi++) {
+        if (worker_games[wi] == 0) continue;
         auto response = resultQueues[wi].dequeue();
 
         if (auto response_q_dataset = dynamic_pointer_cast<QueueResponse_QDataset>(response)) {

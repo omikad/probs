@@ -2,11 +2,21 @@
 
 using namespace std;
 
-
 namespace probs {
 
 
+enum NodeState {
+    CREATED,                    // node just created
+    TERMINAL,                   // game ends here
+    FRONTIER,                   // node is leaf of beam search
+    FRONTIER_MOVES_COMPUTED,    // node is leaf of beam search and its legal moves are computed
+    FRONTIER_Q_COMPUTED,        // node is leaf of beam search and its q values are estimated
+    EXPANDED,                   // node is expanded
+};
+
+
 struct QTrainNode {
+    NodeState state;
     vector<int> kids;
     vector<MoveEstimation> moves;
     int depth;          // depth from top node
@@ -14,22 +24,22 @@ struct QTrainNode {
     int transform;
     lczero::InputPlanes input_planes;
 
-    bool valid_moves_computed;
     vector<MoveEstimation> moves_estimation;
 
-    QTrainNode(const lczero::PositionHistory& lchistory, int depth) : depth(depth), valid_moves_computed(false) {
+    QTrainNode(const lczero::PositionHistory& lchistory, int depth) : state(NodeState::CREATED), depth(depth) {
         input_planes = Encode(lchistory, &transform);
     }
 
     void ComputeValidMoves(const lczero::Position& lcposition) {
-        assert(valid_moves_computed == false);
+        assert(state == NodeState::FRONTIER);
         assert(moves_estimation.size() == 0);
-        valid_moves_computed = true;
         for (auto move : lcposition.GetBoard().GenerateLegalMoves())
             moves_estimation.push_back({move, 0.0f});
+        state = NodeState::FRONTIER_MOVES_COMPUTED;
     }
 
     void AppendKid(int kid, lczero::Move move, float score) {
+        assert(state == NodeState::FRONTIER_Q_COMPUTED);
         kids.push_back(kid);
         moves.push_back({move, score});
     }
@@ -59,7 +69,6 @@ struct EnvExpandState {
     int top_node;
     map<pair<float, int>, int> beam;        // (priority, node) -> node
     vector<QTrainNode> nodes;
-    int expand_tree_size;
     int n_qsa_calls;
 
     EnvExpandState(string start_pos, int n_max_episode_steps)
@@ -69,14 +78,16 @@ struct EnvExpandState {
         top_node = 0;
         beam.insert({{1000.0, 0}, 0});
         nodes.push_back(QTrainNode(tree.ToLczeroHistory(-1), 0));
-        expand_tree_size = 1;
         n_qsa_calls = 0;
+
+        nodes.back().state = NodeState::FRONTIER;
     }
 
     int PopTopPriorityNode() {
         assert(beam.size() > 0);
         int node = beam.rbegin()->second;
         beam.erase(prev(beam.end()));
+        assert(nodes[node].state == NodeState::FRONTIER);
         return node;
     }
 
@@ -88,49 +99,67 @@ struct EnvExpandState {
         return queue;
     }
 
-    void AppendChildren(const int node, const int& max_depth) {
-        auto& qnode = nodes[node];
-        int node_depth = qnode.depth;
+    void ExpandNodeAfterQComputed(const int node, const int& max_depth) {
+        // auto& qnode = nodes[node] - lead to error because emplace_back corrupts this pointer
+        int node_depth = nodes[node].depth;
 
-        assert(qnode.valid_moves_computed == true);
+        assert(nodes[node].state == NodeState::FRONTIER_Q_COMPUTED);
+        assert(nodes[node].moves.size() == 0);
+        assert(nodes[node].kids.size() == 0);
 
-        for (int mi = 0; mi < qnode.moves_estimation.size(); mi++) {
-            auto move = qnode.moves_estimation[mi].move;
-            float score = qnode.moves_estimation[mi].score;
-
+        for (auto [move, score] : nodes[node].moves_estimation) {
             int kid_node = tree.Move(node, move);
 
-            if (node_depth + 1 < max_depth) {
-                float kid_priority = node_depth == 0 ? 1000.0 : score;    // always expand first turn
-                // float kid_priority = score;
-                beam.insert({{kid_priority, kid_node}, kid_node});
-            }
-
             assert(kid_node == nodes.size());
-            nodes.push_back(QTrainNode(tree.ToLczeroHistory(kid_node), node_depth + 1));
+            nodes.emplace_back(tree.ToLczeroHistory(kid_node), node_depth + 1);
+
+            auto kid_result = tree.GetGameResult(kid_node);
+            if (kid_result != lczero::GameResult::UNDECIDED) {
+                bool is_black_won = kid_result == lczero::GameResult::BLACK_WON;
+                score = kid_result == lczero::GameResult::DRAW ? 0
+                    : tree.positions[node].IsBlackToMove() == is_black_won ? 1
+                    : -1;
+                nodes.back().state = NodeState::TERMINAL;
+            }
+            else if (node_depth + 1 < max_depth) {
+                float kid_priority = node_depth == 0 ? 1000.0 : score;    // always expand first turn
+                beam.insert({{kid_priority, kid_node}, kid_node});
+                nodes.back().state = NodeState::FRONTIER;
+            }
+            else
+                nodes.back().state = NodeState::FRONTIER;
 
             nodes[node].AppendKid(kid_node, move, score);
-
-            expand_tree_size++;
         }
+        nodes[node].state = NodeState::EXPANDED;
     }
 
     map<int, float> ComputeLeafValues(ResNet v_model, const at::Device device, const int batch_size) {
         vector<int> bfs = BFS(top_node);
 
-        vector<int> leaf_nodes;
-        for (int node : bfs)
-            if (nodes[node].IsLeaf())
-                leaf_nodes.push_back(node);
-
         map<int, float> leaf_values;
-        for (int start = 0; start < leaf_nodes.size(); start += batch_size) {
-            int end = min((int)leaf_nodes.size(), start + batch_size);
+
+        vector<int> to_compute_nodes;
+        for (int node : bfs)
+            if (nodes[node].IsLeaf()) {
+                auto node_result = tree.GetGameResult(node);
+                if (node_result == lczero::GameResult::UNDECIDED)
+                    to_compute_nodes.push_back(node);
+                else {
+                    bool is_black_won = node_result == lczero::GameResult::BLACK_WON;
+                    leaf_values[node] = node_result == lczero::GameResult::DRAW ? 0
+                        : tree.positions[node].IsBlackToMove() == is_black_won ? 1
+                        : -1;
+                }
+            }
+
+        for (int start = 0; start < to_compute_nodes.size(); start += batch_size) {
+            int end = min((int)to_compute_nodes.size(), start + batch_size);
 
             torch::Tensor input = torch::zeros({end - start, lczero::kInputPlanes, 8, 8});
             for (int bi = 0; bi < end - start; bi++)
                 for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
-                    const auto& plane = nodes[leaf_nodes[start + bi]].input_planes[pi];
+                    const auto& plane = nodes[to_compute_nodes[start + bi]].input_planes[pi];
                     for (auto bit : lczero::IterateBits(plane.mask))
                         input[bi][pi][bit / 8][bit % 8] = plane.value;
                 }
@@ -142,8 +171,9 @@ struct EnvExpandState {
             assert(pred_values.size() == end - start);
 
             for (int bi = 0; bi < end - start; bi++)
-                leaf_values[leaf_nodes[bi + start]] = pred_values[bi];
+                leaf_values[to_compute_nodes[bi + start]] = pred_values[bi];
         }
+
         return leaf_values;
     }
 
@@ -151,7 +181,6 @@ struct EnvExpandState {
         map<int, float> leaf_values = ComputeLeafValues(v_model, device, batch_size);
 
         auto dfs = [&](auto& self, int node)->float {
-
             auto& qnode = nodes[node];
 
             if (qnode.IsLeaf())
@@ -170,48 +199,42 @@ struct EnvExpandState {
         dfs(dfs, top_node);
     }
 
-    void Move(bool exploration_full_random, int exploration_num_first_moves) {
+    void MoveTopNode(bool exploration_full_random, int exploration_num_first_moves) {
+        assert(nodes[top_node].state == NodeState::EXPANDED);
         auto move = GetMoveWithExploration(nodes[top_node].moves, tree.positions[top_node].GetGamePly(), exploration_full_random, exploration_num_first_moves);
 
         int new_top_node = nodes[top_node].FindKidByMove(move);
         assert(new_top_node > top_node);
 
-        vector<int> new_tree_nodes_arr = BFS(new_top_node);
+        map<int, float> old_priorities;
+        for (const auto& kvp : beam)
+            old_priorities[kvp.second] = kvp.first.first;
 
-        if (nodes[new_top_node].kids.size() == 0) {
-            assert(new_tree_nodes_arr.size() == 1);
-            beam.clear();
-            beam.insert({{1000, new_top_node}, new_top_node});
-        }
-        else {
-            set<int> new_tree_nodes_set(begin(new_tree_nodes_arr), end(new_tree_nodes_arr));
+        beam.clear();
 
-            map<pair<float, int>, int> new_beam;
-            for (const auto& kvp : beam) {
-                float priority = kvp.first.first;
-                int node = kvp.second;
-                if (new_tree_nodes_set.find(node) != new_tree_nodes_set.end()) {
-                    if (tree.parents[node] == new_top_node)
-                        priority = 1000;
-                    new_beam.insert({{priority, node}, node});
+        for(const int node : BFS(new_top_node)) {
+            if (tree.GetGameResult(node) != lczero::GameResult::UNDECIDED)
+                continue;
+
+            if (nodes[node].state != NodeState::EXPANDED) {
+                float priority;
+                if (node == new_top_node || tree.parents[node] == new_top_node)
+                    priority = 1000;
+                else {
+                    assert (old_priorities.find(node) != old_priorities.end());
+                    priority = old_priorities[node];
                 }
+                beam.insert({{priority, node}, node});
             }
-            beam = new_beam;
         }
 
         top_node = new_top_node;
 
-        expand_tree_size = new_tree_nodes_arr.size();
-
-        n_qsa_calls = 0;
-        // for (int node : new_tree_nodes_arr)
-        //     if (!nodes[node].IsLeaf())
-        //         n_qsa_calls++;
+        n_qsa_calls = 0;   // TODO: decrease to already passed calls?
     }
 
     void ShowStructure() {
         cout << "EnvExpandState: beam size=" << beam.size()
-             << "; expand_tree_size=" << expand_tree_size
              << "; n_qsa_calls=" << n_qsa_calls
              << "; top_node=" << top_node << endl;
 
@@ -247,7 +270,6 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
     QDataset rows;
 
     vector<EnvExpandState*> envs;
-    vector<PositionHistoryTree*> trees;
 
     while (game_idx < n_games || envs.size() > 0) {
 
@@ -255,7 +277,6 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 // cout << 1 << endl;
             EnvExpandState* env = new EnvExpandState(lczero::ChessBoard::kStartposFen, n_max_episode_steps);
             envs.push_back(env);
-            trees.push_back(&envs.back()->tree);
             game_idx++;
         }
 
@@ -266,6 +287,8 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 
             for (int ei = 0; ei < envs.size(); ei++) {
                 int node = envs[ei]->PopTopPriorityNode();
+                assert(envs[ei]->tree.GetGameResult(node) == lczero::GameResult::UNDECIDED);
+
                 nodes.push_back(node);
 
                 envs[ei]->nodes[node].ComputeValidMoves(envs[ei]->tree.positions[node]);
@@ -275,52 +298,68 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 
             GetQModelEstimation_Nodes(qnodes, q_model, device);
 
+            for (auto& qnode : qnodes) {
+                assert(qnode->state == NodeState::FRONTIER_MOVES_COMPUTED);
+                qnode->state = NodeState::FRONTIER_Q_COMPUTED;
+            }
+
+// cout << 4 << endl;
+
             for (int ei = 0; ei < envs.size(); ei++)
-                envs[ei]->AppendChildren(nodes[ei], tree_max_depth);
+                envs[ei]->ExpandNodeAfterQComputed(nodes[ei], tree_max_depth);
+// cout << 5 << endl;
 
             for (int ei = envs.size() - 1; ei >= 0; ei--) {
-// cout << 4 << endl;
+// cout << 6 << endl;
                 envs[ei]->n_qsa_calls++;
                 
                 if (envs[ei]->beam.size() > 0 && envs[ei]->n_qsa_calls < tree_num_q_s_a_calls)    // need expand more
                     continue;
+// cout << 7 << " dataset size " << rows.size() << endl;
 
                 envs[ei]->ComputeTreeValues(v_model, device, batch_size);
 
-                if (rand() % 1000000 > dataset_drop_ratio * 1000000) {
-                    int top_node = envs[ei]->top_node;
-                    auto& qnode = envs[ei]->nodes[top_node];
+                while (true) {
+// cout << 8 << endl;
+                    if (rand() % 1000000 > dataset_drop_ratio * 1000000) {
+                        int top_node = envs[ei]->top_node;
+                        auto& qnode = envs[ei]->nodes[top_node];
 
-                    rows.push_back({});
-                    assert(qnode.input_planes.size() == lczero::kInputPlanes);
-                    assert(qnode.valid_moves_computed == true);
-                    rows.back().input_planes = qnode.input_planes;
-                    rows.back().transform = qnode.transform;
-                    rows.back().target = qnode.moves_estimation;
-// cout << 5 << " dataset size " << rows.size() << endl;
-                }
+                        rows.push_back({});
+                        assert(qnode.input_planes.size() == lczero::kInputPlanes);
+                        rows.back().input_planes = qnode.input_planes;
+                        rows.back().transform = qnode.transform;
+                        rows.back().target = qnode.moves_estimation;
+                    }
 
-                auto game_result = envs[ei]->tree.GetGameResult(envs[ei]->top_node);   // TODO: ComputeGameResult can reuse computed valid moves
+                    assert(envs[ei]->tree.GetGameResult(envs[ei]->top_node) == lczero::GameResult::UNDECIDED);
 
-                if (game_result == lczero::GameResult::UNDECIDED) {
-// cout << 6 << endl;
-                    envs[ei]->Move(exploration_full_random, exploration_num_first_moves);
-                }
-                else {
-// cout << 7 << endl;
-                    stats["tree_size"].push_back(envs[ei]->nodes.size());
+                    envs[ei]->MoveTopNode(exploration_full_random, exploration_num_first_moves);
+
+                    auto game_result = envs[ei]->tree.GetGameResult(envs[ei]->top_node);
+
+                    if (game_result != lczero::GameResult::UNDECIDED) {
+// cout << 9 << endl;
+                        stats["tree_size"].push_back(envs[ei]->nodes.size());
 cout << "Env finished, dataset size " << rows.size() << endl;
 
-                    if (ei < envs.size() - 1) {
-                        swap(envs[ei], envs[envs.size() - 1]);
-                        swap(trees[ei], trees[trees.size() - 1]);
+                        if (ei < envs.size() - 1)
+                            swap(envs[ei], envs[envs.size() - 1]);
+                        delete envs.back();
+                        envs.pop_back();
+                        break;
                     }
-                    envs.pop_back();
-                    trees.pop_back();
+
+                    if (envs[ei]->beam.size() > 0)
+                        break;
+                    // if beam is empty - play until game is decided and add all moves to the dataset
+
+                    // envs[ei]->ComputeValidMoves(envs[ei]->tree.positions[envs[ei]->top_node]);
                 }
             }
         }
     }
+    assert(envs.size() == 0);
 
     for (auto& kvp : stats) {
         long long cnt = kvp.second.size();
@@ -328,10 +367,6 @@ cout << "Env finished, dataset size " << rows.size() << endl;
         long long mx = 0; for (auto val : kvp.second) mx = max(mx, val);
         cout << "Stat " << kvp.first << ": count=" << cnt << "; mean=" << (double)sm / cnt << "; max=" << mx << endl;
     }
-
-    for (EnvExpandState* env : envs)
-        delete env;
-
     return rows;
 }
 
