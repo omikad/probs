@@ -1,3 +1,5 @@
+#include <optional>
+
 #include "training/q_train.h"
 
 using namespace std;
@@ -20,6 +22,7 @@ struct QTrainNode {
     vector<int> kids;
     vector<MoveEstimation> moves;
     int depth;          // depth from top node
+    optional<float> v_estimation;
 
     int transform;
     lczero::InputPlanes input_planes;
@@ -142,14 +145,18 @@ struct EnvExpandState {
         vector<int> to_compute_nodes;
         for (int node : bfs)
             if (nodes[node].IsLeaf()) {
-                auto node_result = tree.GetGameResult(node);
-                if (node_result == lczero::GameResult::UNDECIDED)
-                    to_compute_nodes.push_back(node);
+                if (nodes[node].v_estimation.has_value())
+                    leaf_values[node] = nodes[node].v_estimation.value();
                 else {
-                    bool is_black_won = node_result == lczero::GameResult::BLACK_WON;
-                    leaf_values[node] = node_result == lczero::GameResult::DRAW ? 0
-                        : tree.positions[node].IsBlackToMove() == is_black_won ? 1
-                        : -1;
+                    auto node_result = tree.GetGameResult(node);
+                    if (node_result == lczero::GameResult::UNDECIDED)
+                        to_compute_nodes.push_back(node);
+                    else {
+                        bool is_black_won = node_result == lczero::GameResult::BLACK_WON;
+                        leaf_values[node] = node_result == lczero::GameResult::DRAW ? 0
+                            : tree.positions[node].IsBlackToMove() == is_black_won ? 1
+                            : -1;
+                    }
                 }
             }
 
@@ -167,11 +174,13 @@ struct EnvExpandState {
             torch::Tensor predictions = v_model->forward(input);
             predictions = predictions.contiguous();
             predictions = predictions.to(torch::kCPU);
-            vector<float> pred_values(predictions.data_ptr<float>(), predictions.data_ptr<float>() + predictions.numel());   // TODO: remove and test speed
-            assert(pred_values.size() == end - start);
 
-            for (int bi = 0; bi < end - start; bi++)
-                leaf_values[to_compute_nodes[bi + start]] = pred_values[bi];
+            for (int bi = 0; bi < end - start; bi++) {
+                float predicted_value = predictions[bi][0].item<float>();
+
+                leaf_values[to_compute_nodes[bi + start]] = predicted_value;
+                nodes[to_compute_nodes[bi + start]].v_estimation = predicted_value;
+            }
         }
 
         return leaf_values;
@@ -212,6 +221,8 @@ struct EnvExpandState {
 
         beam.clear();
 
+        n_qsa_calls = 0;
+
         for(const int node : BFS(new_top_node)) {
             if (tree.GetGameResult(node) != lczero::GameResult::UNDECIDED)
                 continue;
@@ -226,11 +237,11 @@ struct EnvExpandState {
                 }
                 beam.insert({{priority, node}, node});
             }
+            else
+                n_qsa_calls++;
         }
 
         top_node = new_top_node;
-
-        n_qsa_calls = 0;   // TODO: decrease to already passed calls?
     }
 
     void ShowStructure() {
@@ -334,7 +345,12 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 
                     assert(envs[ei]->tree.GetGameResult(envs[ei]->top_node) == lczero::GameResult::UNDECIDED);
 
+                    int n_subtree_nodes_before_move = envs[ei]->BFS(envs[ei]->top_node).size();
                     envs[ei]->MoveTopNode(exploration_full_random, exploration_num_first_moves);
+
+                    int n_subtree_nodes_after_move = envs[ei]->BFS(envs[ei]->top_node).size();
+                    stats["subtree_size"].push_back(n_subtree_nodes_before_move);
+                    stats["reused_size"].push_back(n_subtree_nodes_after_move);
 
                     auto game_result = envs[ei]->tree.GetGameResult(envs[ei]->top_node);
 
