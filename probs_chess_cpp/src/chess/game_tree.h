@@ -30,7 +30,7 @@ class PositionHistoryTree {
             return positions.size() - 1;
         }
 
-        lczero::PositionHistory ToLczeroHistory(const int node) const;
+        std::vector<int> GetHistoryPathNodes(const int node) const;
 
         /// @brief create new node based on `node` with applied move `move`. Return new node index
         int Move(const int node, const lczero::Move move);

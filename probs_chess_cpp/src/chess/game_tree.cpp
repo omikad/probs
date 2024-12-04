@@ -23,15 +23,15 @@ PositionHistoryTree::PositionHistoryTree(const string& starting_fen, const int n
 }
 
 
-lczero::PositionHistory PositionHistoryTree::ToLczeroHistory(const int node) const {
+vector<int> PositionHistoryTree::GetHistoryPathNodes(const int node) const {
+    vector<int> result;
     int runnode = node >= 0 ? node : LastIndex();
-    lczero::PositionHistory lchistory;
     while (runnode >= 0) {
-        lchistory.AppendDontCompute__(positions[runnode]);
+        result.push_back(runnode);
         runnode = parents[runnode];
     }
-    lchistory.ReversePositions__();
-    return lchistory;
+    reverse(begin(result), end(result));
+    return result;
 }
 
 

@@ -31,8 +31,12 @@ class QTrainNode {
 
         vector<MoveEstimation> moves_estimation;
 
-        QTrainNode(const lczero::PositionHistory& lchistory, int depth) : state(NodeState::CREATED), depth(depth) {
-            input_planes = Encode(lchistory, &transform);
+        QTrainNode(const PositionHistoryTree& history_tree, const int last_node, int depth) : state(NodeState::CREATED), depth(depth) {
+            input_planes = Encode(history_tree, last_node, &transform);
+        }
+
+        QTrainNode(const PositionHistoryTree& history_tree, const vector<int>& history_nodes, int depth) : state(NodeState::CREATED), depth(depth) {
+            input_planes = Encode(history_tree, history_nodes, &transform);
         }
 
         void ComputeValidMoves(const lczero::Position& lcposition) {
@@ -82,7 +86,7 @@ struct EnvExpandState {
         // Root node:
         top_node = 0;
         beam.insert({{1000.0, 0}, 0});
-        QTrainNode* new_node = new QTrainNode(tree.ToLczeroHistory(-1), 0);
+        QTrainNode* new_node = new QTrainNode(tree, tree.LastIndex(), 0);
         nodes.push_back(new_node);
         n_qsa_calls = 0;
 
@@ -113,18 +117,18 @@ struct EnvExpandState {
         assert(nodes[node]->moves.size() == 0);
         assert(nodes[node]->kids.size() == 0);
 
-        lczero::PositionHistory parent_history = tree.ToLczeroHistory(node);
+        vector<int> history_nodes = tree.GetHistoryPathNodes(node);
 
         for (auto [move, score] : nodes[node]->moves_estimation) {
             int kid_node = tree.Move(node, move);
 
-            parent_history.AppendDontCompute__(tree.positions[kid_node]);
+            history_nodes.push_back(kid_node);
 
             assert(kid_node == nodes.size());
-            QTrainNode* kid_qnode = new QTrainNode(parent_history, node_depth + 1);
+            QTrainNode* kid_qnode = new QTrainNode(tree, history_nodes, node_depth + 1);
             nodes.push_back(kid_qnode);
 
-            parent_history.Pop();
+            history_nodes.pop_back();
 
             auto kid_result = tree.GetGameResult(kid_node);
             if (kid_result != lczero::GameResult::UNDECIDED) {

@@ -123,7 +123,7 @@ vector<lczero::Move> VResnetPlayer::GetActions(vector<PositionHistoryTree*>& his
             int new_node = history[bi]->Move(last_node_idx, move);
 
             int transform_out;
-            input_planes.push_back(Encode(history[bi]->ToLczeroHistory(new_node), &transform_out));
+            input_planes.push_back(Encode(*history[bi], new_node, &transform_out));
 
             history[bi]->PopLast();
         }

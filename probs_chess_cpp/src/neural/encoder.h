@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "chess/position.h"
+#include "chess/game_tree.h"
 #include "utils/exception.h"
 
 
@@ -58,8 +59,11 @@ int TransformForPosition(InputFormat input_format, const PositionHistory& histor
 // Encodes the last position in history for the neural network request.
 InputPlanes EncodePositionForNN(
     InputFormat input_format,
-    const PositionHistory& history, int history_planes,
-    FillEmptyHistory fill_empty_history, int* transform_out);
+    const probs::PositionHistoryTree& history_tree,
+    const std::vector<int>& history_nodes,
+    int history_planes,
+    FillEmptyHistory fill_empty_history,
+    int* transform_out);
 
 bool IsCanonicalFormat(InputFormat input_format);
 bool IsCanonicalArmageddonFormat(InputFormat input_format);

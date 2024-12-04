@@ -29,10 +29,24 @@ vector<lczero::Move> const EncodedPositionBatch::FindBestMoves() const {
 }
 
 
-lczero::InputPlanes Encode(const lczero::PositionHistory& lchistory, int* transform_out) {
+lczero::InputPlanes Encode(const PositionHistoryTree& history_tree, const vector<int>& history_nodes, int* transform_out) {
     return lczero::EncodePositionForNN(
         lczero::InputFormat::INPUT_112_WITH_CANONICALIZATION_V2,
-        lchistory,
+        history_tree,
+        history_nodes,
+        8,
+        lczero::FillEmptyHistory::FEN_ONLY,
+        transform_out);
+}
+
+
+lczero::InputPlanes Encode(const PositionHistoryTree& history_tree, const int last_node, int* transform_out) {
+    vector<int> history_nodes = history_tree.GetHistoryPathNodes(last_node);
+
+    return lczero::EncodePositionForNN(
+        lczero::InputFormat::INPUT_112_WITH_CANONICALIZATION_V2,
+        history_tree,
+        history_nodes,
         8,
         lczero::FillEmptyHistory::FEN_ONLY,
         transform_out);
@@ -57,11 +71,9 @@ shared_ptr<EncodedPositionBatch> GetQModelEstimation(const vector<PositionHistor
     auto input_accessor = input.accessor<float, 4>();
 
     for (int bi = 0; bi < batch_size; bi++) {
-        lczero::PositionHistory lchistory = trees[bi]->ToLczeroHistory(nodes[bi]);
-
         int transform_out;
 
-        result.planes.push_back(Encode(lchistory, &transform_out));
+        result.planes.push_back(Encode(*trees[bi], nodes[bi], &transform_out));
 
         result.transforms.push_back(transform_out);
 

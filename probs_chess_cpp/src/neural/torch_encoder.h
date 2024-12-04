@@ -25,15 +25,13 @@ struct EncodedPositionBatch {
     std::vector<lczero::Move> const FindBestMoves() const;
 };
 
+lczero::InputPlanes Encode(const PositionHistoryTree& history_tree, const std::vector<int>& history_nodes, int* transform_out);
 
-lczero::InputPlanes Encode(const lczero::PositionHistory& lchistory, int* transform_out);
-
+lczero::InputPlanes Encode(const PositionHistoryTree& history_tree, const int last_node, int* transform_out);
 
 void FillInputTensor(torch::TensorAccessor<float, 4>& input_accessor, const int batch_index, const lczero::InputPlanes& input_planes);
 
-
 std::shared_ptr<EncodedPositionBatch> GetQModelEstimation(const std::vector<PositionHistoryTree*>& trees, const std::vector<int>& nodes, ResNet q_model, const at::Device& device);
-
 
 template<typename TNode>
 void GetQModelEstimation_Nodes(std::vector<TNode*>& result, ResNet q_model, const at::Device& device) {

@@ -47,7 +47,7 @@ void V_predict_self_play(const ConfigParser& config_parser) {
             // cout << "Board at step " << ply << ":\n" << curr_board.DebugString() << endl;
 
             int transform_out;
-            auto input_planes = Encode(tree.ToLczeroHistory(-1), &transform_out);
+            auto input_planes = Encode(tree, tree.LastIndex(), &transform_out);
 
             torch::Tensor input = torch::zeros({1, lczero::kInputPlanes, 8, 8});
             for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
