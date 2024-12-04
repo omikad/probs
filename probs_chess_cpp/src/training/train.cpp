@@ -1,4 +1,7 @@
 #include <ATen/Device.h>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
 #include <time.h>
 
 #include "training/train.h"
@@ -14,7 +17,7 @@ void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQu
     // torch::set_num_threads(1);   // seems like this here don't improve things
 
     auto thread_id = this_thread::get_id();
-    cout << "[WORKER " << thread_id << "] started." << endl;
+    // cout << "[WORKER " << thread_id << "] started." << endl;
 
     try {
         while (true) {
@@ -22,11 +25,11 @@ void worker(ProbsImpl& impl, SafeQueue<shared_ptr<QueueItem>>& taskQueue, SafeQu
             if (!command) break; // Exit signal
 
             if (auto command_self_play = dynamic_pointer_cast<QueueCommand_SelfPlay>(command)) {
-                cout << "[WORKER " << thread_id << "] Got command self play " << command_self_play->n_games << " games. Device = " << impl.device << endl;
+                // cout << "[WORKER " << thread_id << "] Got command self play " << command_self_play->n_games << " games. Device = " << impl.device << endl;
                 auto rows = SelfPlay(impl.model_keeper.q_model, impl.device, impl.config_parser, command_self_play->n_games);
                 resultsQueue.enqueue(make_shared<QueueResponse_SelfPlay>(rows));
             } else if (auto command_get_q = dynamic_pointer_cast<QueueCommand_GetQDataset>(command)) {
-                cout << "[WORKER " << thread_id << "] Got command get q dataset " << command_get_q->n_games << " games. Device = " << impl.device << endl;
+                // cout << "[WORKER " << thread_id << "] Got command get q dataset " << command_get_q->n_games << " games. Device = " << impl.device << endl;
                 auto rows = GetQDataset(impl.model_keeper.v_model, impl.model_keeper.q_model, impl.device, impl.config_parser, command_get_q->n_games);
                 resultsQueue.enqueue(make_shared<QueueResponse_QDataset>(rows));
             } else {
@@ -53,7 +56,7 @@ ProbsImpl::ProbsImpl(const ConfigParser& config_parser)
 }
 
 
-void ProbsImpl::SelfPlayAndTrainV(UsageCounter& usage, const int v_train_episodes) {
+void ProbsImpl::SelfPlayAndTrainV(UsageCounter& usage, ofstream& losses_file, const int v_train_episodes) {
     int wcnt = workers.size();
 
     vector<int> worker_games(wcnt, v_train_episodes / wcnt);
@@ -81,12 +84,12 @@ void ProbsImpl::SelfPlayAndTrainV(UsageCounter& usage, const int v_train_episode
     }
     usage.MarkCheckpoint("get V dataset");
 
-    TrainV(config_parser, model_keeper.v_model, device, model_keeper.v_optimizer, v_dataset);
+    TrainV(config_parser, losses_file, model_keeper.v_model, device, model_keeper.v_optimizer, v_dataset);
     usage.MarkCheckpoint("train V");
 }
 
 
-void ProbsImpl::GetQDatasetAndTrain(UsageCounter& usage, const int q_train_episodes) {
+void ProbsImpl::GetQDatasetAndTrain(UsageCounter& usage, ofstream& losses_file, const int q_train_episodes) {
     int wcnt = workers.size();
 
     vector<int> worker_games(wcnt, q_train_episodes / wcnt);
@@ -113,12 +116,14 @@ void ProbsImpl::GetQDatasetAndTrain(UsageCounter& usage, const int q_train_episo
     }
     usage.MarkCheckpoint("get Q dataset");
 
-    TrainQ(config_parser, model_keeper.q_model, device, model_keeper.q_optimizer, q_dataset);
+    TrainQ(config_parser, losses_file, model_keeper.q_model, device, model_keeper.q_optimizer, q_dataset);
     usage.MarkCheckpoint("train Q");
 }
 
 
 void ProbsImpl::GoTrain() {
+    torch::set_num_threads(1);
+
     int batch_size = config_parser.GetInt("training.batch_size");
     double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio");
     bool exploration_full_random = config_parser.KeyExist("training.exploration_full_random");
@@ -129,6 +134,7 @@ void ProbsImpl::GoTrain() {
     int q_train_episodes = config_parser.GetInt("training.q_train_episodes");
     int tree_num_q_s_a_calls = config_parser.GetInt("training.tree_num_q_s_a_calls");
     int tree_max_depth = config_parser.GetInt("training.tree_max_depth");
+    int evaluate_n_games = config_parser.GetInt("infra.evaluate_n_games");
 
     cout << "[TRAIN] Start training:" << endl;
     cout << "  batch_size = " << batch_size << endl;
@@ -141,10 +147,17 @@ void ProbsImpl::GoTrain() {
     cout << "  tree_num_q_s_a_calls = " << tree_num_q_s_a_calls << endl;
     cout << "  tree_max_depth = " << tree_max_depth << endl;
 
-    torch::set_num_threads(1);
+    std::time_t t =  std::time(NULL);
+    std::tm tm    = *std::localtime(&t);
+    std::ostringstream losses_log_filename;
+    losses_log_filename << config_parser.GetString("infra.losses_log_dir") << "/losses_" << std::put_time(&tm, "%Y%m%d-%H%M%S") << ".log";
+    cout << "  losses log file name = " << losses_log_filename.str() << endl;
+    
+    ofstream losses_file;
+    losses_file.open(losses_log_filename.str());
 
     int gpu_num = config_parser.GetInt("infra.gpu");
-    cout << "[TRAIN] GPU: " << gpu_num << endl;
+    cout << "  GPU = " << gpu_num << endl;
     if (gpu_num >= 0) {
         if (torch::cuda::is_available())
             device = at::Device("cuda:" + to_string(gpu_num));
@@ -153,18 +166,38 @@ void ProbsImpl::GoTrain() {
         model_keeper.v_model->to(device);
         model_keeper.q_model->to(device);
     }
+    model_keeper.SetEvalMode();
+
+    IPlayer* player1;
+    IPlayer* player2;
+    player1 = new QResnetPlayer(model_keeper.q_model, device, "QResnetPlayer");
+    player2 = new RandomPlayer("RandomPlayer");
+    cout << "  evaluate on " << evaluate_n_games << " games " << player1->GetName() << " vs " << player2->GetName() << endl;
 
     for (int high_level_i = 0; high_level_i < n_high_level_iterations; high_level_i++) {
         UsageCounter usage;
 
-        SelfPlayAndTrainV(usage, v_train_episodes);
+        SelfPlayAndTrainV(usage, losses_file, v_train_episodes);
 
         model_keeper.SetEvalMode();
-        GetQDatasetAndTrain(usage, q_train_episodes);
+        GetQDatasetAndTrain(usage, losses_file, q_train_episodes);
 
         model_keeper.SetEvalMode();
         model_keeper.SaveCheckpoint();
         usage.MarkCheckpoint("save models");
+
+        BattleInfo battle_info = ComparePlayers(*player1, *player2, evaluate_n_games, n_max_episode_steps);
+        int w = battle_info.results[0][0] + battle_info.results[0][1];
+        int d = battle_info.results[1][0] + battle_info.results[1][1];
+        int l = battle_info.results[2][0] + battle_info.results[2][1];
+        int games = w + d + l;
+        double q_player_score = (w + (double)d / 2) / (double)games;
+        cout << "[TRAIN] High level iteration " << high_level_i << " completed. ";
+        cout << "Q player wins=" << battle_info.results[0][0] << "," << battle_info.results[0][1];
+        cout << "; draws=" << battle_info.results[1][0] << "," << battle_info.results[1][1];
+        cout << "; losses=" << battle_info.results[2][0] << "," << battle_info.results[2][1];
+        cout << "; score=" << q_player_score << endl;
+        losses_file << "WinScore: " << q_player_score << endl;
 
         usage.PrintStats();
     }
@@ -172,6 +205,10 @@ void ProbsImpl::GoTrain() {
     // Shutdown workers
     for (int wi = 0; wi < workers.size(); wi++) taskQueues[wi].enqueue(nullptr);
     for (auto& worker : workers) worker.join();
+
+    delete player1;
+    delete player2;
+    losses_file.close();
 }
 
 }  // namespace probs

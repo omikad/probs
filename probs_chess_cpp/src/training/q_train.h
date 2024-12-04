@@ -2,6 +2,7 @@
 #include <vector>
 #include <memory>
 #include <utility>
+#include <fstream>
 #include <ATen/Device.h>
 #include <torch/torch.h>
 
@@ -29,6 +30,6 @@ using QDataset = std::vector<QDatasetRow>;
 
 QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const ConfigParser& config_parser, const int n_games);
 
-void TrainQ(const ConfigParser& config_parser, ResNet q_model, at::Device& device, torch::optim::AdamW& q_optimizer, QDataset& q_dataset);
+void TrainQ(const ConfigParser& config_parser, std::ofstream& losses_file, ResNet q_model, at::Device& device, torch::optim::AdamW& q_optimizer, QDataset& q_dataset);
 
 }  // namespace probs

@@ -6,12 +6,15 @@
 #include <queue>
 #include <mutex>
 #include <condition_variable>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <torch/torch.h>
 #include <ATen/Device.h>
 
 #include "infra/config_parser.h"
+#include "infra/battle.h"
+#include "infra/player.h"
 #include "neural/encoder.h"
 #include "utils/ts_queue.h"
 #include "utils/usage_counter.h"
@@ -61,8 +64,8 @@ class ProbsImpl {
     public:
         ProbsImpl(const ConfigParser& config_parser);
         void GoTrain();
-        void SelfPlayAndTrainV(UsageCounter& usage, const int v_train_episodes);
-        void GetQDatasetAndTrain(UsageCounter& usage, const int q_train_episodes);
+        void SelfPlayAndTrainV(UsageCounter& usage, std::ofstream& losses_file, const int v_train_episodes);
+        void GetQDatasetAndTrain(UsageCounter& usage, std::ofstream& losses_file, const int q_train_episodes);
         const ConfigParser& config_parser;
         ModelKeeper model_keeper;
         at::Device device;

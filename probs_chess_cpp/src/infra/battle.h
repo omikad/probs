@@ -13,9 +13,8 @@
 
 namespace probs {
 
-class Battle {
-    public:
-        static void GoBattle(const ConfigParser &config_parser);
-};
+BattleInfo ComparePlayers(IPlayer& player1, IPlayer& player2, int evaluate_n_games, int n_max_episode_steps);
+
+void GoBattle(const ConfigParser &config_parser);
 
 }  // namespace probs

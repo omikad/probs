@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
         lczero::InitializeMagicBitboards();
 
         if (command == "battle") {
-            probs::Battle::GoBattle(config);
+            probs::GoBattle(config);
         }
         else if (command == "train") {
             probs::ProbsImpl probs(config);

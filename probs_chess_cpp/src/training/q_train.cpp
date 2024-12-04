@@ -409,7 +409,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 }
 
 
-void TrainQ(const ConfigParser& config_parser, ResNet q_model, at::Device& device, torch::optim::AdamW& q_optimizer, QDataset& q_dataset) {
+void TrainQ(const ConfigParser& config_parser, ofstream& losses_file, ResNet q_model, at::Device& device, torch::optim::AdamW& q_optimizer, QDataset& q_dataset) {
     q_model->train();
 
     int dataset_size = q_dataset.size();
@@ -475,7 +475,7 @@ void TrainQ(const ConfigParser& config_parser, ResNet q_model, at::Device& devic
         loss.backward();
 
         q_optimizer.step();
-        cout << "QLoss: " << loss.item<float>() << endl;
+        losses_file << "QLoss: " << loss.item<float>() << endl;
     }
 }
 

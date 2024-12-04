@@ -159,6 +159,9 @@ vector<lczero::Move> VResnetPlayer::GetActions(vector<PositionHistoryTree*>& his
 }
 
 
+QResnetPlayer::QResnetPlayer(ResNet q_model, at::Device& device, const std::string& name) : name(name), q_model(q_model), device(device) {}
+
+
 QResnetPlayer::QResnetPlayer(ModelKeeper& model_keeper, const ConfigParser& config_parser, const string& config_key_prefix, const string& name):
         name(name),
         device(torch::kCPU),

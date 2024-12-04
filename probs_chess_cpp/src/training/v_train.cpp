@@ -95,7 +95,7 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
 }
 
 
-void TrainV(const ConfigParser& config_parser, ResNet v_model, at::Device& device, torch::optim::AdamW& v_optimizer, VDataset& v_dataset) {
+void TrainV(const ConfigParser& config_parser, ofstream& losses_file, ResNet v_model, at::Device& device, torch::optim::AdamW& v_optimizer, VDataset& v_dataset) {
     v_model->train();
 
     int dataset_size = v_dataset.size();
@@ -154,7 +154,7 @@ void TrainV(const ConfigParser& config_parser, ResNet v_model, at::Device& devic
 
         v_optimizer.step();
 
-        cout << "VLoss: " << loss.item<float>() << endl;
+        losses_file << "VLoss: " << loss.item<float>() << endl;
     }
 }
 

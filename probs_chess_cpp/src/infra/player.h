@@ -60,6 +60,7 @@ class VResnetPlayer : public IPlayer {
 class QResnetPlayer : public IPlayer {
     public:
         QResnetPlayer(ModelKeeper& model_keeper, const ConfigParser& config_parser, const std::string& config_key_prefix, const std::string& name);
+        QResnetPlayer(ResNet q_model, at::Device& device, const std::string& name);
         virtual std::vector<lczero::Move> GetActions(std::vector<PositionHistoryTree*>& history);
         virtual std::string GetName() {return name;};
         const std::string name;
