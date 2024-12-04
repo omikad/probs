@@ -291,24 +291,22 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
     int game_idx = 0;
     map<string, vector<long long>> stats;
     QDataset rows;
-    UsageCounter usage;
+    // UsageCounter usage;
 
     vector<EnvExpandState*> envs;
 
     while (game_idx < n_games || envs.size() > 0) {
 
         if (envs.size() < batch_size && game_idx < n_games) {
-// cout << 1 << endl;
             EnvExpandState* env = new EnvExpandState(lczero::ChessBoard::kStartposFen, n_max_episode_steps);
             envs.push_back(env);
             game_idx++;
         }
         else {
-// cout << 2 << endl;
             vector<int> nodes;
             vector<QTrainNode*> qnodes;
 
-            usage.MarkCheckpoint("1. Init");
+            // usage.MarkCheckpoint("1. Init");
 
             for (int ei = 0; ei < envs.size(); ei++) {
                 int node = envs[ei]->PopTopPriorityNode();
@@ -319,43 +317,37 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                 envs[ei]->nodes[node]->ComputeValidMoves(envs[ei]->tree.positions[node]);
                 qnodes.push_back(envs[ei]->nodes[node]);
             }
-// cout << 3 << endl;
 
-            usage.MarkCheckpoint("2. Pop nodes");
+            // usage.MarkCheckpoint("2. Pop nodes");
 
             GetQModelEstimation_Nodes(qnodes, q_model, device);
 
-            usage.MarkCheckpoint("3. Q estimate");
+            // usage.MarkCheckpoint("3. Q estimate");
 
             for (auto& qnode : qnodes) {
                 assert(qnode->state == NodeState::FRONTIER_MOVES_COMPUTED);
                 qnode->state = NodeState::FRONTIER_Q_COMPUTED;
             }
 
-// cout << 4 << endl;
 
             for (int ei = 0; ei < envs.size(); ei++)
                 envs[ei]->ExpandNodeAfterQComputed(nodes[ei], tree_max_depth);
-// cout << 5 << endl;
 
-            usage.MarkCheckpoint("4. Expand");
+            // usage.MarkCheckpoint("4. Expand");
 
             for (int ei = envs.size() - 1; ei >= 0; ei--) {
-// cout << 6 << endl;
                 envs[ei]->n_qsa_calls++;
                 
                 if (envs[ei]->beam.size() > 0 && envs[ei]->n_qsa_calls < tree_num_q_s_a_calls)    // need expand more
                     continue;
-// cout << 7 << " dataset size " << rows.size() << endl;
 
-                usage.MarkCheckpoint("5. Pre compute V");
+                // usage.MarkCheckpoint("5. Pre compute V");
 
                 envs[ei]->ComputeTreeValues(v_model, device, batch_size);
 
-                usage.MarkCheckpoint("6. Compute V");
+                // usage.MarkCheckpoint("6. Compute V");
 
                 while (true) {
-// cout << 8 << endl;
                     if (rand() % 1000000 > dataset_drop_ratio * 1000000) {
                         int top_node = envs[ei]->top_node;
                         QTrainNode* qnode = envs[ei]->nodes[top_node];
@@ -369,19 +361,18 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 
                     assert(envs[ei]->tree.GetGameResult(envs[ei]->top_node) == lczero::GameResult::UNDECIDED);
 
-                    int n_subtree_nodes_before_move = envs[ei]->BFS(envs[ei]->top_node).size();
+                    // int n_subtree_nodes_before_move = envs[ei]->BFS(envs[ei]->top_node).size();
                     envs[ei]->MoveTopNode(exploration_full_random, exploration_num_first_moves);
 
-                    int n_subtree_nodes_after_move = envs[ei]->BFS(envs[ei]->top_node).size();
-                    stats["subtree_size"].push_back(n_subtree_nodes_before_move);
-                    stats["reused_size"].push_back(n_subtree_nodes_after_move);
+                    // int n_subtree_nodes_after_move = envs[ei]->BFS(envs[ei]->top_node).size();
+                    // stats["subtree_size"].push_back(n_subtree_nodes_before_move);
+                    // stats["reused_size"].push_back(n_subtree_nodes_after_move);
 
                     auto game_result = envs[ei]->tree.GetGameResult(envs[ei]->top_node);
 
                     if (game_result != lczero::GameResult::UNDECIDED) {
-// cout << 9 << endl;
                         stats["tree_size"].push_back(envs[ei]->nodes.size());
-cout << "Env finished, dataset size " << rows.size() << endl;
+                        // cout << "Env finished, dataset size " << rows.size() << endl;
 
                         if (ei < envs.size() - 1)
                             swap(envs[ei], envs[envs.size() - 1]);
@@ -400,13 +391,13 @@ cout << "Env finished, dataset size " << rows.size() << endl;
                     // envs[ei]->ComputeValidMoves(envs[ei]->tree.positions[envs[ei]->top_node]);
                 }
 
-                usage.MarkCheckpoint("7. Finalizing");
+                // usage.MarkCheckpoint("7. Finalizing");
             }
         }
     }
     assert(envs.size() == 0);
 
-    usage.PrintStats();
+    // usage.PrintStats();
 
     for (auto& kvp : stats) {
         long long cnt = kvp.second.size();
