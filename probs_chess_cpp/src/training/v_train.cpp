@@ -25,10 +25,9 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
 
     int game_idx = 0;
     VDataset rows;
-    vector<int> rows_envs_nodes;
 
     vector<PositionHistoryTree*> trees;
-    vector<vector<int>> tree_rows;
+    vector<vector<pair<int, int>>> tree_rows;  // env_index -> [(row_idx, node)]
 
     while (game_idx < n_games || trees.size() > 0) {
 
@@ -50,9 +49,8 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
 
                 if (rand() % 1000000 >= dataset_drop_ratio * 1000000) {
                     float is_row_black = trees[ei]->LastPosition().IsBlackToMove() ? 1 : -1;
-                    tree_rows[ei].push_back(rows.size());
+                    tree_rows[ei].push_back({ rows.size(), trees[ei]->LastIndex() });
                     rows.push_back({encoded_batch->planes[ei], is_row_black});
-                    rows_envs_nodes.push_back(trees[ei]->LastIndex());
                 }
 
                 auto game_result = trees[ei]->GetGameResult(-1);
@@ -67,7 +65,7 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
                         : game_result == lczero::GameResult::BLACK_WON ? 1
                         : -1;
 
-                    for (int row_idx : tree_rows[ei]) {
+                    for (auto [row_idx, node] : tree_rows[ei]) {
                         float is_row_black = rows[row_idx].second;
                         rows[row_idx].second = is_row_black * black_score;
                     }
@@ -89,8 +87,7 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
                             assert(trees[ei]->parents[start_node] == start_node - 1);                // should be chain-like
                         }
 
-                        for (int row_idx : tree_rows[ei]) {
-                            int node = rows_envs_nodes[row_idx];
+                        for (auto [row_idx, node] : tree_rows[ei]) {
                             float expected_score = (trees[ei]->positions[node].IsBlackToMove() ? 1 : -1) * black_score;
                             float actual_score = rows[row_idx].second;
                             assert(abs(expected_score - actual_score) < 1e-5);

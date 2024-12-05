@@ -22,14 +22,13 @@ class QTrainNode {
     public:
         NodeState state;
         vector<int> kids;
-        vector<MoveEstimation> moves;
+        vector<MoveEstimation> moves_estimation;
         int depth;          // depth from top node
         optional<float> v_estimation;
 
         int transform;
         lczero::InputPlanes input_planes;
 
-        vector<MoveEstimation> moves_estimation;
 
         QTrainNode(const PositionHistoryTree& history_tree, const int last_node, int depth) : state(NodeState::CREATED), depth(depth) {
             input_planes = Encode(history_tree, last_node, &transform);
@@ -47,16 +46,10 @@ class QTrainNode {
             state = NodeState::FRONTIER_MOVES_COMPUTED;
         }
 
-        void AppendKid(int kid, lczero::Move move, float score) {
-            assert(state == NodeState::FRONTIER_Q_COMPUTED);
-            kids.push_back(kid);
-            moves.push_back({move, score});
-        }
-
         int FindKidByMove(const lczero::Move move) const {
-            assert(kids.size() == moves.size());
+            assert(kids.size() == moves_estimation.size());
             for (int ki = 0; ki < kids.size(); ki++)
-                if (moves[ki].move == move)
+                if (moves_estimation[ki].move == move)
                     return kids[ki];
             return -1;
         }
@@ -66,9 +59,9 @@ class QTrainNode {
         }
 
         void ShowKidsInfo() const {
-            assert(kids.size() == moves.size());
+            assert(kids.size() == moves_estimation.size());
             for (int ki = 0; ki < kids.size(); ki++)
-                cout << "     Kid=" << kids[ki] << "; move=" << moves[ki].move.as_string() << "; " << moves[ki].score << endl;
+                cout << "     Kid=" << kids[ki] << "; move=" << moves_estimation[ki].move.as_string() << "; " << moves_estimation[ki].score << endl;
         }
 };
 
@@ -114,36 +107,38 @@ struct EnvExpandState {
         int node_depth = nodes[node]->depth;
 
         assert(nodes[node]->state == NodeState::FRONTIER_Q_COMPUTED);
-        assert(nodes[node]->moves.size() == 0);
+        assert(nodes[node]->moves_estimation.size() > 0);
         assert(nodes[node]->kids.size() == 0);
 
         vector<int> history_nodes = tree.GetHistoryPathNodes(node);
 
-        for (auto [move, score] : nodes[node]->moves_estimation) {
+        for (int ki = 0; ki < nodes[node]->moves_estimation.size(); ki++) {
+            auto move = nodes[node]->moves_estimation[ki].move;
+            float q_estimation_score = nodes[node]->moves_estimation[ki].score;
+
             int kid_node = tree.Move(node, move);
+            assert(kid_node == nodes.size());
 
             history_nodes.push_back(kid_node);
-
-            assert(kid_node == nodes.size());
             QTrainNode* kid_qnode = new QTrainNode(tree, history_nodes, node_depth + 1);
-            nodes.push_back(kid_qnode);
-
             history_nodes.pop_back();
+
+            nodes.push_back(kid_qnode);
 
             optional<int> kid_score = tree.GetRelativePositionScore(kid_node);
             if (kid_score.has_value()) {
-                score = kid_score.value();
+                nodes[node]->moves_estimation[ki].score = -kid_score.value();  // overwrite estimation with terminal value
                 nodes.back()->state = NodeState::TERMINAL;
             }
             else if (node_depth + 1 < max_depth) {
-                float kid_priority = node_depth == 0 ? 1000.0 : score;    // always expand first turn
+                float kid_priority = node_depth == 0 ? 1000.0 : q_estimation_score;    // always expand first turn
                 beam.insert({{kid_priority, kid_node}, kid_node});
                 nodes.back()->state = NodeState::FRONTIER;
             }
             else
                 nodes.back()->state = NodeState::FRONTIER;
 
-            nodes[node]->AppendKid(kid_node, move, score);
+            nodes[node]->kids.push_back(kid_node);
         }
         nodes[node]->state = NodeState::EXPANDED;
     }
@@ -202,10 +197,10 @@ struct EnvExpandState {
 
             float curr_val = -1000.0;
 
-            assert(qnode->kids.size() == qnode->moves.size());
+            assert(qnode->kids.size() == qnode->moves_estimation.size());
             for (int ki = 0; ki < qnode->kids.size(); ki++) {
                 float kid_val = self(self, qnode->kids[ki]);
-                qnode->moves[ki].score = -kid_val;
+                qnode->moves_estimation[ki].score = -kid_val;
                 curr_val = max(curr_val, -kid_val);
             }
             return curr_val;
@@ -215,7 +210,7 @@ struct EnvExpandState {
 
     void MoveTopNode(bool exploration_full_random, int exploration_num_first_moves) {
         assert(nodes[top_node]->state == NodeState::EXPANDED);
-        auto move = GetMoveWithExploration(nodes[top_node]->moves, tree.positions[top_node].GetGamePly(), exploration_full_random, exploration_num_first_moves);
+        auto move = GetMoveWithExploration(nodes[top_node]->moves_estimation, tree.positions[top_node].GetGamePly(), exploration_full_random, exploration_num_first_moves);
 
         int new_top_node = nodes[top_node]->FindKidByMove(move);
         assert(new_top_node > top_node);
@@ -288,14 +283,14 @@ struct EnvExpandState {
             else {
                 assert(computed_kids[node].size() > 0);
                 assert(nodes[node]->kids.size() == computed_kids[node].size());
-                assert(nodes[node]->moves.size() == computed_kids[node].size());
+                assert(nodes[node]->moves_estimation.size() == computed_kids[node].size());
 
                 expected_score = -1000;
                 for (int ki = 0; ki < computed_kids[node].size(); ki++) {
                     int kid_node = computed_kids[node][ki];
 
                     float kid_expected_score = self(self, kid_node);
-                    float kid_actual_score = -nodes[node]->moves[ki].score;
+                    float kid_actual_score = -nodes[node]->moves_estimation[ki].score;
                     // cout << " inside " << ki << " " << kid_expected_score << " " << kid_actual_score << endl;
                     assert(abs(kid_actual_score - kid_expected_score) < 1e-5);
 
@@ -307,7 +302,7 @@ struct EnvExpandState {
 
         for (int ki = 0; ki < nodes[top_node]->kids.size(); ki++) {
             int top_kid_node = nodes[top_node]->kids[ki];
-            float actual = nodes[top_node]->moves[ki].score;
+            float actual = nodes[top_node]->moves_estimation[ki].score;
             float expected = -dfs_test(dfs_test, top_kid_node);
             // cout << ki << " " << actual << " " << expected << endl;
             assert(abs(actual - expected) < 1e-5);
@@ -333,6 +328,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
     int game_idx = 0;
     map<string, vector<long long>> stats;
     QDataset rows;
+    vector<vector<pair<int, int>>> tree_rows;  // env_index -> [(row_idx, node)]
     // UsageCounter usage;
 
     vector<EnvExpandState*> envs;
@@ -342,6 +338,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
         if (envs.size() < batch_size && game_idx < n_games) {
             EnvExpandState* env = new EnvExpandState(lczero::ChessBoard::kStartposFen, n_max_episode_steps);
             envs.push_back(env);
+            tree_rows.push_back({});
             game_idx++;
         }
         else {
@@ -392,8 +389,11 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                 while (true) {
                     if (rand() % 1000000 > dataset_drop_ratio * 1000000) {
                         int top_node = envs[ei]->top_node;
+                        assert(envs[ei]->tree.GetGameResult(top_node) == lczero::GameResult::UNDECIDED);
+
                         QTrainNode* qnode = envs[ei]->nodes[top_node];
 
+                        tree_rows[ei].push_back({ rows.size(), top_node });
                         rows.push_back({});
                         assert(qnode->input_planes.size() == lczero::kInputPlanes);
                         rows.back().input_planes = qnode->input_planes;
@@ -407,6 +407,14 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                     if (is_test) {
                         n_subtree_nodes_before_move = envs[ei]->BFS(envs[ei]->top_node).size();
                         envs[ei]->TestCorrectness();
+                        for (auto [row_idx, node] : tree_rows[ei]) {
+                            assert(envs[ei]->nodes[node]->kids.size() > 0);
+                            assert(envs[ei]->nodes[node]->kids.size() == rows[row_idx].target.size());
+                            for (int ki = 0; ki < envs[ei]->nodes[node]->kids.size(); ki++) {
+                                assert(envs[ei]->nodes[node]->moves_estimation[ki].move == rows[row_idx].target[ki].move);
+                                assert(abs(envs[ei]->nodes[node]->moves_estimation[ki].score - rows[row_idx].target[ki].score) < 1e-5);
+                            }
+                        }
                     } 
 
                     envs[ei]->MoveTopNode(exploration_full_random, exploration_num_first_moves);
@@ -423,13 +431,16 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                         stats["tree_size"].push_back(envs[ei]->nodes.size());
                         // cout << "Env finished, dataset size " << rows.size() << endl;
 
-                        if (ei < envs.size() - 1)
+                        if (ei < envs.size() - 1) {
                             swap(envs[ei], envs[envs.size() - 1]);
+                            swap(tree_rows[ei], tree_rows[tree_rows.size() - 1]);
+                        }
 
                         for (int qi = 0; qi < envs.back()->nodes.size(); qi++)
                             delete envs.back()->nodes[qi];
                         delete envs.back();
                         envs.pop_back();
+                        tree_rows.pop_back();
                         break;
                     }
 
