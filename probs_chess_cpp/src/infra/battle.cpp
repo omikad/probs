@@ -82,8 +82,8 @@ void GoBattle(const ConfigParser& config_parser) {
         }
     }
 
-    int evaluate_n_games = config_parser.GetInt("infra.evaluate_n_games");
-    int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps");
+    int evaluate_n_games = config_parser.GetInt("infra.evaluate_n_games", true, 0);
+    int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps", true, 0);
 
     BattleInfo battle_info = ComparePlayers(*player1, *player2, evaluate_n_games, n_max_episode_steps);
 

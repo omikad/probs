@@ -13,8 +13,8 @@ namespace probs {
 
 
 torch::optim::AdamW adam_factory(const ConfigParser& config_parser, const string& training_key, ResNet model) {
-    float learning_rate = config_parser.GetDouble(training_key + ".learning_rate");
-    float weight_decay = config_parser.GetDouble(training_key + ".weight_decay");
+    float learning_rate = config_parser.GetDouble(training_key + ".learning_rate", true, 0);
+    float weight_decay = config_parser.GetDouble(training_key + ".weight_decay", true, 0);
 
     torch::optim::AdamWOptions adam_options(learning_rate);
     adam_options.weight_decay(weight_decay);

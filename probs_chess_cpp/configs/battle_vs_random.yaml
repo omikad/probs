@@ -1,8 +1,8 @@
 name: 'Battle model vs random'
 player1:
   # kind: "random"
-  kind: "one_step_lookahead"
-  # kind: "two_step_lookahead"
+  # kind: "one_step_lookahead"
+  kind: "two_step_lookahead"
   # kind: "q_resnet_player"
   # kind: "v_resnet_player"      # this player uses V model for actions
   # model:
@@ -17,8 +17,9 @@ player1:
     # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241201-165653*'
 
 player2:
-  # kind: "random"
-  kind: "two_step_lookahead"
+  kind: "random"
+  # kind: "one_step_lookahead"
+  # kind: "two_step_lookahead"
 
 env:
   n_max_episode_steps: 500

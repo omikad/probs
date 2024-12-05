@@ -130,12 +130,9 @@ struct EnvExpandState {
 
             history_nodes.pop_back();
 
-            auto kid_result = tree.GetGameResult(kid_node);
-            if (kid_result != lczero::GameResult::UNDECIDED) {
-                bool is_black_won = kid_result == lczero::GameResult::BLACK_WON;
-                score = kid_result == lczero::GameResult::DRAW ? 0
-                    : tree.positions[node].IsBlackToMove() == is_black_won ? 1
-                    : -1;
+            optional<int> kid_score = tree.GetRelativePositionScore(kid_node);
+            if (kid_score.has_value()) {
+                score = kid_score.value();
                 nodes.back()->state = NodeState::TERMINAL;
             }
             else if (node_depth + 1 < max_depth) {
@@ -162,15 +159,11 @@ struct EnvExpandState {
                 if (nodes[node]->v_estimation.has_value())
                     leaf_values[node] = nodes[node]->v_estimation.value();
                 else {
-                    auto node_result = tree.GetGameResult(node);
-                    if (node_result == lczero::GameResult::UNDECIDED)
+                    optional<int> node_score = tree.GetRelativePositionScore(node);
+                    if (!node_score.has_value())
                         to_compute_nodes.push_back(node);
-                    else {
-                        bool is_black_won = node_result == lczero::GameResult::BLACK_WON;
-                        leaf_values[node] = node_result == lczero::GameResult::DRAW ? 0
-                            : tree.positions[node].IsBlackToMove() == is_black_won ? 1
-                            : -1;
-                    }
+                    else
+                        leaf_values[node] = node_score.value();
                 }
             }
 
@@ -212,7 +205,7 @@ struct EnvExpandState {
             assert(qnode->kids.size() == qnode->moves.size());
             for (int ki = 0; ki < qnode->kids.size(); ki++) {
                 float kid_val = self(self, qnode->kids[ki]);
-                qnode->moves[ki].score = kid_val;
+                qnode->moves[ki].score = -kid_val;
                 curr_val = max(curr_val, -kid_val);
             }
             return curr_val;
@@ -272,6 +265,54 @@ struct EnvExpandState {
             nodes[node]->ShowKidsInfo();
         }
     }
+
+    void TestCorrectness() {
+        assert(tree.positions.size() > 0);
+
+        vector<vector<int>> computed_kids(tree.positions.size());
+        for (int node = 0; node < tree.positions.size(); node++)
+            if (tree.parents[node] >= 0)
+                computed_kids[tree.parents[node]].push_back(node);
+
+        auto dfs_test = [&](auto& self, int node)->float {
+            optional<int> node_score = tree.GetRelativePositionScore(node);
+            float expected_score;
+
+            if (node_score.has_value())
+                expected_score = node_score.value();
+            else if (computed_kids[node].size() == 0) {
+                assert(nodes[node]->kids.size() == 0);
+                assert(nodes[node]->v_estimation.has_value());
+                expected_score = nodes[node]->v_estimation.value();
+            }
+            else {
+                assert(computed_kids[node].size() > 0);
+                assert(nodes[node]->kids.size() == computed_kids[node].size());
+                assert(nodes[node]->moves.size() == computed_kids[node].size());
+
+                expected_score = -1000;
+                for (int ki = 0; ki < computed_kids[node].size(); ki++) {
+                    int kid_node = computed_kids[node][ki];
+
+                    float kid_expected_score = self(self, kid_node);
+                    float kid_actual_score = -nodes[node]->moves[ki].score;
+                    // cout << " inside " << ki << " " << kid_expected_score << " " << kid_actual_score << endl;
+                    assert(abs(kid_actual_score - kid_expected_score) < 1e-5);
+
+                    expected_score = max(expected_score, -kid_actual_score);
+                }
+            }
+            return expected_score;
+        };
+
+        for (int ki = 0; ki < nodes[top_node]->kids.size(); ki++) {
+            int top_kid_node = nodes[top_node]->kids[ki];
+            float actual = nodes[top_node]->moves[ki].score;
+            float expected = -dfs_test(dfs_test, top_kid_node);
+            // cout << ki << " " << actual << " " << expected << endl;
+            assert(abs(actual - expected) < 1e-5);
+        }
+    }
 };
 
 
@@ -280,13 +321,14 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
     v_model->eval();
     q_model->eval();
 
-    int batch_size = config_parser.GetInt("training.batch_size");
-    int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps");
-    double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio");
-    int exploration_num_first_moves = config_parser.GetInt("training.exploration_num_first_moves");
-    bool exploration_full_random = config_parser.KeyExist("training.exploration_full_random");
-    int tree_num_q_s_a_calls = config_parser.GetInt("training.tree_num_q_s_a_calls");
-    int tree_max_depth = config_parser.GetInt("training.tree_max_depth");
+    int batch_size = config_parser.GetInt("training.batch_size", true, 0);
+    int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps", true, 0);
+    double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio", false, 0);
+    int exploration_num_first_moves = config_parser.GetInt("training.exploration_num_first_moves", true, 0);
+    bool exploration_full_random = config_parser.GetInt("training.exploration_full_random", false, 0) > 0;
+    int tree_num_q_s_a_calls = config_parser.GetInt("training.tree_num_q_s_a_calls", true, 0);
+    int tree_max_depth = config_parser.GetInt("training.tree_max_depth", true, 0);
+    bool is_test = config_parser.GetInt("training.is_test", false, 0) > 0;
 
     int game_idx = 0;
     map<string, vector<long long>> stats;
@@ -361,12 +403,19 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 
                     assert(envs[ei]->tree.GetGameResult(envs[ei]->top_node) == lczero::GameResult::UNDECIDED);
 
-                    // int n_subtree_nodes_before_move = envs[ei]->BFS(envs[ei]->top_node).size();
+                    int n_subtree_nodes_before_move = 0;
+                    if (is_test) {
+                        n_subtree_nodes_before_move = envs[ei]->BFS(envs[ei]->top_node).size();
+                        envs[ei]->TestCorrectness();
+                    } 
+
                     envs[ei]->MoveTopNode(exploration_full_random, exploration_num_first_moves);
 
-                    // int n_subtree_nodes_after_move = envs[ei]->BFS(envs[ei]->top_node).size();
-                    // stats["subtree_size"].push_back(n_subtree_nodes_before_move);
-                    // stats["reused_size"].push_back(n_subtree_nodes_after_move);
+                    if (is_test) {
+                        int n_subtree_nodes_after_move = envs[ei]->BFS(envs[ei]->top_node).size();
+                        stats["subtree_size"].push_back(n_subtree_nodes_before_move);
+                        stats["reused_size"].push_back(n_subtree_nodes_after_move);
+                    }
 
                     auto game_result = envs[ei]->tree.GetGameResult(envs[ei]->top_node);
 
@@ -396,6 +445,8 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
         }
     }
     assert(envs.size() == 0);
+    if (is_test)
+        cout << "Q train ok" << endl;
 
     // usage.PrintStats();
 
@@ -415,7 +466,7 @@ void TrainQ(const ConfigParser& config_parser, ofstream& losses_file, ResNet q_m
     int dataset_size = q_dataset.size();
     cout << "[Train.Q] Train Q model on dataset with " << dataset_size << " rows" << endl;
 
-    int batch_size = config_parser.GetInt("training.batch_size");
+    int batch_size = config_parser.GetInt("training.batch_size", true, 0);
 
     vector<int> indices(dataset_size);
     for (int i = 0; i < dataset_size; i++) indices[i] = i;

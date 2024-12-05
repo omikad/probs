@@ -29,31 +29,38 @@ bool ConfigParser::KeyExist(const std::string& key) const {
     return true;
 }
 
-YAML::Node ConfigParser::GetNode(const string& key) const {
+YAML::Node ConfigParser::GetNode(const string& key, bool key_required, bool* key_found) const {
     istringstream key_stream(key);
     string token;
     vector<YAML::Node> n{config};
+    *key_found = false;
 
     while (getline(key_stream, token, '.')) {
         if (!n.back()[token]) {
-            throw runtime_error("Invalid configuration key: " + key);
+            if (key_required)
+                throw runtime_error("Invalid configuration key: " + key);
+            return n.back();
         }
         n.push_back(n.back()[token]);
     }
+    *key_found = true;
     return n.back();
 }
 
 string ConfigParser::GetString(const string& key) const {
-    auto node = GetNode(key);
+    bool key_found;
+    auto node = GetNode(key, true, &key_found);
     return node.as<string>();
 }
 
-int ConfigParser::GetInt(const string& key) const {
-    auto node = GetNode(key);
-    return node.as<int>();
+int ConfigParser::GetInt(const string& key, bool key_required, const int default_value) const {
+    bool key_found;
+    auto node = GetNode(key, key_required, &key_found);
+    return key_found ? node.as<int>() : default_value;
 }
 
-double ConfigParser::GetDouble(const string& key) const {
-    auto node = GetNode(key);
-    return node.as<double>();
+double ConfigParser::GetDouble(const string& key, bool key_required, const double default_value) const {
+    bool key_found;
+    auto node = GetNode(key, key_required, &key_found);
+    return key_found ? node.as<double>() : default_value;
 }

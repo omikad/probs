@@ -47,7 +47,7 @@ ProbsImpl::ProbsImpl(const ConfigParser& config_parser)
         : config_parser(config_parser),
         model_keeper(config_parser, "model.v", "model.q", "training"),
         device(torch::kCPU) {
-    int n_threads = config_parser.GetInt("infra.n_threads");
+    int n_threads = config_parser.GetInt("infra.n_threads", false, 1);
     taskQueues = vector<SafeQueue<shared_ptr<QueueItem>>>(n_threads);
     resultQueues = vector<SafeQueue<shared_ptr<QueueItem>>>(n_threads);
 
@@ -124,17 +124,17 @@ void ProbsImpl::GetQDatasetAndTrain(UsageCounter& usage, ofstream& losses_file, 
 void ProbsImpl::GoTrain() {
     torch::set_num_threads(1);
 
-    int batch_size = config_parser.GetInt("training.batch_size");
-    double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio");
-    bool exploration_full_random = config_parser.KeyExist("training.exploration_full_random");
-    int exploration_num_first_moves = config_parser.GetInt("training.exploration_num_first_moves");
-    int n_high_level_iterations = config_parser.GetInt("training.n_high_level_iterations");
-    int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps");
-    int v_train_episodes = config_parser.GetInt("training.v_train_episodes");
-    int q_train_episodes = config_parser.GetInt("training.q_train_episodes");
-    int tree_num_q_s_a_calls = config_parser.GetInt("training.tree_num_q_s_a_calls");
-    int tree_max_depth = config_parser.GetInt("training.tree_max_depth");
-    int evaluate_n_games = config_parser.GetInt("infra.evaluate_n_games");
+    int batch_size = config_parser.GetInt("training.batch_size", true, 0);
+    double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio", false, 0);
+    bool exploration_full_random = config_parser.GetInt("training.exploration_full_random", false, 0) > 0;
+    int exploration_num_first_moves = config_parser.GetInt("training.exploration_num_first_moves", true, 0);
+    int n_high_level_iterations = config_parser.GetInt("training.n_high_level_iterations", true, 0);
+    int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps", true, 0);
+    int v_train_episodes = config_parser.GetInt("training.v_train_episodes", true, 0);
+    int q_train_episodes = config_parser.GetInt("training.q_train_episodes", true, 0);
+    int tree_num_q_s_a_calls = config_parser.GetInt("training.tree_num_q_s_a_calls", true, 0);
+    int tree_max_depth = config_parser.GetInt("training.tree_max_depth", true, 0);
+    int evaluate_n_games = config_parser.GetInt("infra.evaluate_n_games", true, 0);
 
     cout << "[TRAIN] Start training:" << endl;
     cout << "  batch_size = " << batch_size << endl;
@@ -156,7 +156,7 @@ void ProbsImpl::GoTrain() {
     ofstream losses_file;
     losses_file.open(losses_log_filename.str());
 
-    int gpu_num = config_parser.GetInt("infra.gpu");
+    int gpu_num = config_parser.GetInt("infra.gpu", false, -1);
     cout << "  GPU = " << gpu_num << endl;
     if (gpu_num >= 0) {
         if (torch::cuda::is_available())
@@ -171,7 +171,7 @@ void ProbsImpl::GoTrain() {
     IPlayer* player1;
     IPlayer* player2;
     player1 = new QResnetPlayer(model_keeper.q_model, device, "QResnetPlayer");
-    player2 = new RandomPlayer("RandomPlayer");
+    player2 = new NStepLookaheadPlayer("OneStepLookahead", 1);
     cout << "  evaluate on " << evaluate_n_games << " games " << player1->GetName() << " vs " << player2->GetName() << endl;
 
     for (int high_level_i = 0; high_level_i < n_high_level_iterations; high_level_i++) {
@@ -198,6 +198,7 @@ void ProbsImpl::GoTrain() {
         cout << "; losses=" << battle_info.results[2][0] << "," << battle_info.results[2][1];
         cout << "; score=" << q_player_score << endl;
         losses_file << "WinScore: " << q_player_score << endl;
+        usage.MarkCheckpoint("report wins");
 
         usage.PrintStats();
     }

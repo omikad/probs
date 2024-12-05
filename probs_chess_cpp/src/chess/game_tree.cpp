@@ -121,4 +121,29 @@ int PositionHistoryTree::ComputeLastMoveRepetitions(const int node, int* cycle_l
     return 0;
 }
 
+
+vector<int> PositionHistoryTree::BFS(const int start_node) const {
+    vector<vector<int>> kids(positions.size());
+    for (int node = 0; node < positions.size(); node++)
+        if (parents[node] >= 0)
+            kids[parents[node]].push_back(node);
+
+    vector<int> queue;
+    for (int qi = 0; qi < queue.size(); qi++)
+        for (int kid : kids[queue[qi]])
+            queue.push_back(kid);
+
+    return queue;
+}
+
+
+std::optional<int> PositionHistoryTree::GetRelativePositionScore(const int node) const {
+    auto game_result = game_results[node];
+    if (game_result == lczero::GameResult::UNDECIDED)
+        return std::nullopt;
+    return game_result == lczero::GameResult::DRAW ? 0
+        : positions[node].IsBlackToMove() == (game_result == lczero::GameResult::BLACK_WON) ? 1
+        : -1;
+}
+
 }   // namespace probs

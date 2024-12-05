@@ -72,6 +72,9 @@
         "__bit_reference": "cpp",
         "__string": "cpp",
         "ios": "cpp",
-        "queue": "cpp"
+        "queue": "cpp",
+        "hash_map": "cpp",
+        "hash_set": "cpp",
+        "*.inc": "cpp"
     }
 }

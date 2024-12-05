@@ -13,7 +13,7 @@ model:
 training:
   n_high_level_iterations: 1
   v_train_episodes: 10
-  q_train_episodes: 100
+  q_train_episodes: 10
   dataset_drop_ratio: 0.5
   tree_num_q_s_a_calls: 100
   tree_max_depth: 10000
@@ -26,8 +26,10 @@ training:
 
   # resume from checkpoint:
   # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241127-181135*'
+
+  is_test: 1    # apply various checks on each iteration
 infra:
   gpu: 0                               # gpu id, use -1 for cpu
   n_threads: 5
-  # evaluate_n_games: 100
-  # log: 'mem'                            # write learning curves to 'tf' or 'mem'
+  evaluate_n_games: 100
+  losses_log_dir: '/home/excellent/ds/probs/probs_chess_cpp/logs'

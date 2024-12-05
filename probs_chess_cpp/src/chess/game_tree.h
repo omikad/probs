@@ -1,6 +1,7 @@
 #pragma once
 #include <iostream>
 #include <vector>
+#include <optional>
 
 #include "chess/bitboard.h"
 #include "chess/board.h"
@@ -30,13 +31,18 @@ class PositionHistoryTree {
             return positions.size() - 1;
         }
 
-        std::vector<int> GetHistoryPathNodes(const int node) const;
-
         /// @brief create new node based on `node` with applied move `move`. Return new node index
         int Move(const int node, const lczero::Move move);
 
         /// @brief remove last node from the tree
         void PopLast();
+
+        std::vector<int> GetHistoryPathNodes(const int node) const;
+
+        // Note: tree doesn't have kid nodes, thats why this method runs through the whole tree
+        std::vector<int> BFS(const int start_node) const;
+
+        std::optional<int> GetRelativePositionScore(const int node) const;
 
         /// @brief node -> board position
         std::vector<lczero::Position> positions;

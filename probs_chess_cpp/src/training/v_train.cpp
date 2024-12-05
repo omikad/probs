@@ -10,11 +10,12 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
     torch::NoGradGuard no_grad;
     q_model->eval();
 
-    int batch_size = config_parser.GetInt("training.batch_size");
-    int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps");
-    double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio");
-    int exploration_num_first_moves = config_parser.GetInt("training.exploration_num_first_moves");
-    bool exploration_full_random = config_parser.KeyExist("training.exploration_full_random");
+    int batch_size = config_parser.GetInt("training.batch_size", true, 0);
+    int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps", true, 0);
+    double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio", true, 0);
+    int exploration_num_first_moves = config_parser.GetInt("training.exploration_num_first_moves", true, 0);
+    bool exploration_full_random = config_parser.GetInt("training.exploration_full_random", false, 0) > 0;
+    bool is_test = config_parser.GetInt("training.is_test", false, 0) > 0;
 
     // cout << "[SELFPLAY] batch_size = " << batch_size << endl;
     // cout << "[SELFPLAY] n_max_episode_steps = " << n_max_episode_steps << endl;
@@ -24,6 +25,7 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
 
     int game_idx = 0;
     VDataset rows;
+    vector<int> rows_envs_nodes;
 
     vector<PositionHistoryTree*> trees;
     vector<vector<int>> tree_rows;
@@ -50,6 +52,7 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
                     float is_row_black = trees[ei]->LastPosition().IsBlackToMove() ? 1 : -1;
                     tree_rows[ei].push_back(rows.size());
                     rows.push_back({encoded_batch->planes[ei], is_row_black});
+                    rows_envs_nodes.push_back(trees[ei]->LastIndex());
                 }
 
                 auto game_result = trees[ei]->GetGameResult(-1);
@@ -77,6 +80,23 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
                     //     cout << " " << rows[ri].second;
                     // cout << endl;
 
+                    if (is_test) {
+                        int game_plys = trees[ei]->LastPosition().GetGamePly();
+                        assert(trees[ei]->positions.size() == game_plys + 1);
+
+                        for (int start_node = 0; start_node < trees[ei]->positions.size(); start_node++) {
+                            assert(trees[ei]->positions[start_node].GetGamePly() == start_node);
+                            assert(trees[ei]->parents[start_node] == start_node - 1);                // should be chain-like
+                        }
+
+                        for (int row_idx : tree_rows[ei]) {
+                            int node = rows_envs_nodes[row_idx];
+                            float expected_score = (trees[ei]->positions[node].IsBlackToMove() ? 1 : -1) * black_score;
+                            float actual_score = rows[row_idx].second;
+                            assert(abs(expected_score - actual_score) < 1e-5);
+                        }
+                    }
+
                     if (ei < trees.size() - 1) {
                         swap(trees[ei], trees[trees.size() - 1]);
                         swap(tree_rows[ei], tree_rows[tree_rows.size() - 1]);
@@ -90,6 +110,8 @@ VDataset SelfPlay(ResNet q_model, at::Device& device, const ConfigParser& config
         }
     }
     assert(trees.size() == 0);
+    if (is_test)
+        cout << "V train ok" << endl;
 
     return rows;
 }
@@ -111,7 +133,7 @@ void TrainV(const ConfigParser& config_parser, ofstream& losses_file, ResNet v_m
         cout << "zeros=" << (double)counter[0] / v_dataset.size() << endl;
     }
 
-    int batch_size = config_parser.GetInt("training.batch_size");
+    int batch_size = config_parser.GetInt("training.batch_size", true, 0);
 
     vector<int> indices(dataset_size);
     for (int i = 0; i < dataset_size; i++) indices[i] = i;

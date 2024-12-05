@@ -94,7 +94,7 @@ VResnetPlayer::VResnetPlayer(ModelKeeper& model_keeper, const ConfigParser& conf
         device(torch::kCPU),
         v_model(config_parser, config_key_prefix + ".model.v", true) {
 
-    int gpu_num = config_parser.GetInt("infra.gpu");
+    int gpu_num = config_parser.GetInt("infra.gpu", false, -1);
     cout << "VResnetPlayer GPU: " << gpu_num << endl;
     if (gpu_num >= 0) {
         if (torch::cuda::is_available())
@@ -167,7 +167,7 @@ QResnetPlayer::QResnetPlayer(ModelKeeper& model_keeper, const ConfigParser& conf
         device(torch::kCPU),
         q_model(config_parser, config_key_prefix + ".model.q", false) {
 
-    int gpu_num = config_parser.GetInt("infra.gpu");
+    int gpu_num = config_parser.GetInt("infra.gpu", false, -1);
     cout << "QResnetPlayer GPU: " << gpu_num << endl;
     if (gpu_num >= 0) {
         if (torch::cuda::is_available())
