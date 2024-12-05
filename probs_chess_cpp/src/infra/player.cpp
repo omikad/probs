@@ -131,13 +131,9 @@ vector<lczero::Move> VResnetPlayer::GetActions(vector<PositionHistoryTree*>& his
         assert(history[bi]->LastIndex() == last_node_idx);
 
         torch::Tensor input = torch::zeros({(int)moves.size(), lczero::kInputPlanes, 8, 8});
+        auto input_accessor = input.accessor<float, 4>();
         for (int mi = 0; mi < moves.size(); mi++)
-            for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
-                const auto& plane = input_planes[mi][pi];
-                for (auto bit : lczero::IterateBits(plane.mask)) {
-                    input[mi][pi][bit / 8][bit % 8] = plane.value;
-                }
-            }
+            FillInputTensor(input_accessor, mi, input_planes[mi]);
 
         input = input.to(device);
 

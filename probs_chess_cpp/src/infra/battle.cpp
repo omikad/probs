@@ -11,43 +11,60 @@ BattleInfo ComparePlayers(IPlayer& player1, IPlayer& player2, int evaluate_n_gam
 
     BattleInfo battle_info;
 
+    vector<PositionHistoryTree*> trees;
+    vector<bool> alive;
     for (int gi = 0; gi < evaluate_n_games; gi++) {
-        PositionHistoryTree tree(starting_fen, n_max_episode_steps);
-
-        int start_player_shift = tree.LastPosition().IsBlackToMove() ? 1 : 0;
-
-        while (tree.GetGameResult(-1) == lczero::GameResult::UNDECIDED) {
-            int ply = tree.LastPosition().GetGamePly();
-
-            // cout << "Board at step " << ply << ":\n" << curr_board.DebugString() << endl;
-
-            vector<PositionHistoryTree*> trees = { &tree };
-            auto move = ((ply + gi) % 2 == 0 ? player1 : player2).GetActions(trees)[0];
-            
-            // cout << "PLY " << ply << " " << "Player " << ((ply + gi) % 2 == 0 ? player1 : player2)->GetName() << " selected move " << move.as_string() << " " << (int)env_player.GameResult() << endl;
-
-            tree.Move(-1, move);
-        }
-
-        auto game_result = tree.GetGameResult(-1);
-        if ((gi + start_player_shift) % 2 == 0) {   // player1 is white:
-            if (game_result == lczero::GameResult::WHITE_WON)
-                battle_info.results[0][0]++;
-            else if (game_result == lczero::GameResult::BLACK_WON)
-                battle_info.results[2][0]++;
-            else
-                battle_info.results[1][0]++;
-        }
-        else {   // player 1 is black
-            if (game_result == lczero::GameResult::WHITE_WON)
-                battle_info.results[2][1]++;
-            else if (game_result == lczero::GameResult::BLACK_WON)
-                battle_info.results[0][1]++;
-            else
-                battle_info.results[1][1]++;
-        }
-        battle_info.games_played++;
+        PositionHistoryTree* tree = new PositionHistoryTree(starting_fen, n_max_episode_steps);
+        trees.push_back(tree);
+        alive.push_back(true);
     }
+
+    int alive_cnt = trees.size();
+    for (int step_i = 0; step_i < n_max_episode_steps; step_i++) {
+        if (alive_cnt == 0)
+            break;
+
+        vector<PositionHistoryTree*> trees1;
+        vector<PositionHistoryTree*> trees2;
+        for (int i = 0; i < trees.size(); i++)
+            if (alive[i])
+                (i % 2 == step_i % 2 ? trees1 : trees2).push_back(trees[i]);
+
+        vector<lczero::Move> moves1 = player1.GetActions(trees1);
+        vector<lczero::Move> moves2 = player2.GetActions(trees2);
+
+        for (int i = 0; i < trees1.size(); i++) trees1[i]->Move(-1, moves1[i]);
+        for (int i = 0; i < trees2.size(); i++) trees2[i]->Move(-1, moves2[i]);
+
+        for (int i = 0; i < trees.size(); i++) {
+            auto game_result = trees[i]->GetGameResult(-1);
+            if (alive[i] && game_result != lczero::GameResult::UNDECIDED) {
+                alive[i] = false;
+                alive_cnt--;
+
+                if (i % 2 == 0) {   // player1 is white:
+                    if (game_result == lczero::GameResult::WHITE_WON)
+                        battle_info.results[0][0]++;
+                    else if (game_result == lczero::GameResult::BLACK_WON)
+                        battle_info.results[2][0]++;
+                    else
+                        battle_info.results[1][0]++;
+                }
+                else {   // player 1 is black
+                    if (game_result == lczero::GameResult::WHITE_WON)
+                        battle_info.results[2][1]++;
+                    else if (game_result == lczero::GameResult::BLACK_WON)
+                        battle_info.results[0][1]++;
+                    else
+                        battle_info.results[1][1]++;
+                }                
+                battle_info.games_played++;
+            }
+        }
+    }
+
+    for (int i = 0; i < trees.size(); i++)
+        delete trees[i];
 
     return battle_info;
 }

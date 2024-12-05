@@ -2,19 +2,19 @@ name: 'Battle model vs random'
 player1:
   # kind: "random"
   # kind: "one_step_lookahead"
-  kind: "two_step_lookahead"
-  # kind: "q_resnet_player"
+  # kind: "two_step_lookahead"
   # kind: "v_resnet_player"      # this player uses V model for actions
-  # model:
-  #   v:
-  #     type: resnet
-  #     res_blocks: 3
-  #     filters: 80
-  #   q:
-  #     type: resnet
-  #     res_blocks: 3
-  #     filters: 80
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241201-165653*'
+  kind: "q_resnet_player"
+  model:
+    v:
+      type: resnet
+      res_blocks: 3
+      filters: 80
+    q:
+      type: resnet
+      res_blocks: 3
+      filters: 80
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241205-190006*'
 
 player2:
   kind: "random"
@@ -25,4 +25,4 @@ env:
   n_max_episode_steps: 500
 infra:
   gpu: -1                               # gpu id, use -1 for cpu
-  evaluate_n_games: 100
+  evaluate_n_games: 1000
