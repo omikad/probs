@@ -129,6 +129,7 @@ void ProbsImpl::GoTrain() {
     bool exploration_full_random = config_parser.GetInt("training.exploration_full_random", false, 0) > 0;
     int exploration_num_first_moves = config_parser.GetInt("training.exploration_num_first_moves", true, 0);
     int n_high_level_iterations = config_parser.GetInt("training.n_high_level_iterations", true, 0);
+    int q_train_sub_iterations = config_parser.GetInt("training.q_train_sub_iterations", true, 0);
     int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps", true, 0);
     int v_train_episodes = config_parser.GetInt("training.v_train_episodes", true, 0);
     int q_train_episodes = config_parser.GetInt("training.q_train_episodes", true, 0);
@@ -141,6 +142,7 @@ void ProbsImpl::GoTrain() {
     cout << "  exploration_full_random = " << (exploration_full_random ? "true" : "false") << endl;
     cout << "  exploration_num_first_moves = " << exploration_num_first_moves << endl;
     cout << "  n_high_level_iterations = " << n_high_level_iterations << endl;
+    cout << "  q_train_sub_iterations = " << q_train_sub_iterations << endl;
     cout << "  n_max_episode_steps = " << n_max_episode_steps << endl;
     cout << "  v_train_episodes = " << v_train_episodes << endl;
     cout << "  q_train_episodes = " << q_train_episodes << endl;
@@ -179,8 +181,10 @@ void ProbsImpl::GoTrain() {
 
         SelfPlayAndTrainV(usage, losses_file, v_train_episodes);
 
-        model_keeper.SetEvalMode();
-        GetQDatasetAndTrain(usage, losses_file, q_train_episodes);
+        for (int q_train_sub_i = 0; q_train_sub_i < q_train_sub_iterations; q_train_sub_i++) {
+            model_keeper.SetEvalMode();
+            GetQDatasetAndTrain(usage, losses_file, q_train_episodes);
+        }
 
         model_keeper.SetEvalMode();
         model_keeper.SaveCheckpoint();

@@ -5,6 +5,8 @@ execute_process (COMMAND bash -c "PYTHONPATH=../py_binding/ python3 ../py_bindin
 # Project Name
 project(ProbsChess)
 
+# set(CMAKE_BUILD_TYPE RelWithDebInfo)
+
 # Conda env
 list(APPEND CMAKE_PREFIX_PATH "/home/excellent/miniconda3/envs/ds")
 

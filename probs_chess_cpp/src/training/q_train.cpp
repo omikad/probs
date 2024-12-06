@@ -80,10 +80,9 @@ struct EnvExpandState {
         top_node = 0;
         beam.insert({{1000.0, 0}, 0});
         QTrainNode* new_node = new QTrainNode(tree, tree.LastIndex(), 0);
+        new_node->state = NodeState::FRONTIER;
         nodes.push_back(new_node);
         n_qsa_calls = 0;
-
-        nodes.back()->state = NodeState::FRONTIER;
     }
 
     int PopTopPriorityNode() {
@@ -128,15 +127,15 @@ struct EnvExpandState {
             optional<int> kid_score = tree.GetRelativePositionScore(kid_node);
             if (kid_score.has_value()) {
                 nodes[node]->moves_estimation[ki].score = -kid_score.value();  // overwrite estimation with terminal value
-                nodes.back()->state = NodeState::TERMINAL;
+                kid_qnode->state = NodeState::TERMINAL;
             }
             else if (node_depth + 1 < max_depth) {
                 float kid_priority = node_depth == 0 ? 1000.0 : q_estimation_score;    // always expand first turn
                 beam.insert({{kid_priority, kid_node}, kid_node});
-                nodes.back()->state = NodeState::FRONTIER;
+                kid_qnode->state = NodeState::FRONTIER;
             }
             else
-                nodes.back()->state = NodeState::FRONTIER;
+                kid_qnode->state = NodeState::FRONTIER;
 
             nodes[node]->kids.push_back(kid_node);
         }
@@ -168,7 +167,7 @@ struct EnvExpandState {
             torch::Tensor input = torch::zeros({end - start, lczero::kInputPlanes, 8, 8});
             auto input_accessor = input.accessor<float, 4>();
             for (int bi = 0; bi < end - start; bi++)
-                FillInputTensor(input_accessor, bi, nodes[to_compute_nodes[start + bi]]->input_planes);
+                FillInputTensor(input_accessor, bi, nodes[to_compute_nodes[bi + start]]->input_planes);
 
             input = input.to(device);
             torch::Tensor predictions = v_model->forward(input);
@@ -208,12 +207,29 @@ struct EnvExpandState {
         dfs(dfs, top_node);
     }
 
+    // Clear memory of all kids of the given `new_top_node`, except kid `keep_kid` and its subtree
+    void ClearKids(const int new_top_node, const int keep_kid) {
+        vector<int> queue { new_top_node };
+        for (int qi = 0; qi < queue.size(); qi++) {
+            for (int kid : nodes[queue[qi]]->kids)
+                if (kid != keep_kid)
+                    queue.push_back(kid);
+        }
+
+        for (int qi = 0; qi < queue.size(); qi++)
+            if (queue[qi] != new_top_node) {
+                delete nodes[queue[qi]];
+                nodes[queue[qi]] = nullptr;
+            }
+    }
+
     void MoveTopNode(bool exploration_full_random, int exploration_num_first_moves) {
         assert(nodes[top_node]->state == NodeState::EXPANDED);
         auto move = GetMoveWithExploration(nodes[top_node]->moves_estimation, tree.positions[top_node].GetGamePly(), exploration_full_random, exploration_num_first_moves);
 
         int new_top_node = nodes[top_node]->FindKidByMove(move);
         assert(new_top_node > top_node);
+        ClearKids(top_node, new_top_node);
 
         map<int, float> old_priorities;
         for (const auto& kvp : beam)
@@ -224,7 +240,7 @@ struct EnvExpandState {
         n_qsa_calls = 0;
 
         for(const int node : BFS(new_top_node)) {
-            if (tree.GetGameResult(node) != lczero::GameResult::UNDECIDED)
+            if (tree.GetGameResult(node) != lczero::GameResult::UNDECIDED)   // terminal node
                 continue;
 
             if (nodes[node]->state != NodeState::EXPANDED) {
@@ -351,9 +367,9 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                 int node = envs[ei]->PopTopPriorityNode();
                 assert(envs[ei]->tree.GetGameResult(node) == lczero::GameResult::UNDECIDED);
 
-                nodes.push_back(node);
-
                 envs[ei]->nodes[node]->ComputeValidMoves(envs[ei]->tree.positions[node]);
+
+                nodes.push_back(node);
                 qnodes.push_back(envs[ei]->nodes[node]);
             }
 
@@ -363,7 +379,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 
             // usage.MarkCheckpoint("3. Q estimate");
 
-            for (auto& qnode : qnodes) {
+            for (QTrainNode* qnode : qnodes) {
                 assert(qnode->state == NodeState::FRONTIER_MOVES_COMPUTED);
                 qnode->state = NodeState::FRONTIER_Q_COMPUTED;
             }
@@ -387,13 +403,13 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                 // usage.MarkCheckpoint("6. Compute V");
 
                 while (true) {
+                    int prev_top_node = envs[ei]->top_node;
+                    assert(envs[ei]->tree.GetGameResult(prev_top_node) == lczero::GameResult::UNDECIDED);
+
                     if (rand() % 1000000 > dataset_drop_ratio * 1000000) {
-                        int top_node = envs[ei]->top_node;
-                        assert(envs[ei]->tree.GetGameResult(top_node) == lczero::GameResult::UNDECIDED);
+                        QTrainNode* qnode = envs[ei]->nodes[prev_top_node];
 
-                        QTrainNode* qnode = envs[ei]->nodes[top_node];
-
-                        tree_rows[ei].push_back({ rows.size(), top_node });
+                        tree_rows[ei].push_back({ rows.size(), prev_top_node });
                         rows.push_back({});
                         assert(qnode->input_planes.size() == lczero::kInputPlanes);
                         rows.back().input_planes = qnode->input_planes;
@@ -401,11 +417,9 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                         rows.back().target = qnode->moves_estimation;
                     }
 
-                    assert(envs[ei]->tree.GetGameResult(envs[ei]->top_node) == lczero::GameResult::UNDECIDED);
-
                     int n_subtree_nodes_before_move = 0;
                     if (is_test) {
-                        n_subtree_nodes_before_move = envs[ei]->BFS(envs[ei]->top_node).size();
+                        n_subtree_nodes_before_move = envs[ei]->BFS(prev_top_node).size();
                         envs[ei]->TestCorrectness();
                         for (auto [row_idx, node] : tree_rows[ei]) {
                             assert(envs[ei]->nodes[node]->kids.size() > 0);
@@ -433,11 +447,12 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 
                         if (ei < envs.size() - 1) {
                             swap(envs[ei], envs[envs.size() - 1]);
-                            swap(tree_rows[ei], tree_rows[tree_rows.size() - 1]);
+                            swap(tree_rows[ei], tree_rows[tree_rows.size() - 1]);   // TODO: optimize
                         }
 
-                        for (int qi = 0; qi < envs.back()->nodes.size(); qi++)
-                            delete envs.back()->nodes[qi];
+                        for (QTrainNode* qnode : envs.back()->nodes)
+                            if (qnode != nullptr)
+                                delete qnode;
                         delete envs.back();
                         envs.pop_back();
                         tree_rows.pop_back();
@@ -486,6 +501,8 @@ void TrainQ(const ConfigParser& config_parser, ofstream& losses_file, ResNet q_m
     for (int end = batch_size; end <= dataset_size; end += batch_size) {
         // torch::Tensor target = torch::zeros({batch_size, 1});
         torch::Tensor input = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
+        auto input_accessor = input.accessor<float, 4>();
+
         torch::Tensor target_vals = torch::zeros({batch_size, lczero::kNumOutputPolicyFilters, 8, 8});
         torch::Tensor target_mask = torch::zeros({batch_size, lczero::kNumOutputPolicyFilters, 8, 8});
         int actions_mask_norm = 0;
@@ -506,12 +523,7 @@ void TrainQ(const ConfigParser& config_parser, ofstream& losses_file, ResNet q_m
                 actions_mask_norm++;
             }
 
-            for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
-                const lczero::InputPlane& plane = q_dataset[row_i].input_planes[pi];
-                for (auto bit : lczero::IterateBits(plane.mask)) {
-                    input[bi][pi][bit / 8][bit % 8] = plane.value;
-                }
-            }
+            FillInputTensor(input_accessor, bi, q_dataset[row_i].input_planes);
         }
 
         // cout << "Input: " << DebugString(input) << endl;

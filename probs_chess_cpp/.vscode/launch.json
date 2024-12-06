@@ -10,8 +10,8 @@
             "request": "launch",
             "program": "/home/excellent/ds/probs/probs_chess_cpp/build/ProbsChess",
             "args": [
-                "tests",
-                "../configs/battle_vs_random.yaml"
+                "train",
+                "/home/excellent/ds/probs/probs_chess_cpp/configs/train_example.yaml"
             ],
             "stopAtEntry": false,
             // "cwd": "/home/excellent/ds/probs/probs_chess_cpp/src",

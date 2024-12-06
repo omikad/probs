@@ -70,7 +70,7 @@ void PositionHistoryTree::ComputeNodeGameResult(const int node) {
 
 int PositionHistoryTree::Move(const int node_, const lczero::Move move_) {
     assert(node_ < (int)positions.size());
-    int node = node_ >= 0 ? node_ : (positions.size() - 1);
+    int node = node_ >= 0 ? node_ : LastIndex();
 
     auto move = positions[node].GetBoard().GetModernMove(move_);
 
@@ -138,6 +138,7 @@ vector<int> PositionHistoryTree::BFS(const int start_node) const {
 
 
 std::optional<int> PositionHistoryTree::GetRelativePositionScore(const int node) const {
+    assert(node < (int)positions.size());
     auto game_result = game_results[node];
     if (game_result == lczero::GameResult::UNDECIDED)
         return std::nullopt;

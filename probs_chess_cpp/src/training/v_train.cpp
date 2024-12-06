@@ -139,6 +139,7 @@ void TrainV(const ConfigParser& config_parser, ofstream& losses_file, ResNet v_m
     for (int end = batch_size; end <= dataset_size; end += batch_size) {
         torch::Tensor target = torch::zeros({batch_size, 1});
         torch::Tensor input = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
+        auto input_accessor = input.accessor<float, 4>();
 
         for (int ri = end - batch_size; ri < end; ri++) {
             int bi = ri - end + batch_size;
@@ -146,12 +147,7 @@ void TrainV(const ConfigParser& config_parser, ofstream& losses_file, ResNet v_m
 
             target[bi][0] = v_dataset[row_i].second;
 
-            for (int pi = 0; pi < lczero::kInputPlanes; pi++) {
-                const lczero::InputPlane& plane = v_dataset[row_i].first[pi];
-                for (auto bit : lczero::IterateBits(plane.mask)) {
-                    input[bi][pi][bit / 8][bit % 8] = plane.value;
-                }
-            }
+            FillInputTensor(input_accessor, bi, v_dataset[row_i].first);
         }
 
         input = input.to(device);
