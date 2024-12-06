@@ -38,10 +38,10 @@ class QTrainNode {
             input_planes = Encode(history_tree, history_nodes, &transform);
         }
 
-        void ComputeValidMoves(const lczero::Position& lcposition) {
+        void AddValidMoves(const vector<lczero::Move>& valid_moves) {
             assert(state == NodeState::FRONTIER);
             assert(moves_estimation.size() == 0);
-            for (auto move : lcposition.GetBoard().GenerateLegalMoves())
+            for (auto move : valid_moves)
                 moves_estimation.push_back({move, 0.0f});
             state = NodeState::FRONTIER_MOVES_COMPUTED;
         }
@@ -367,7 +367,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                 int node = envs[ei]->PopTopPriorityNode();
                 assert(envs[ei]->tree.GetGameResult(node) == lczero::GameResult::UNDECIDED);
 
-                envs[ei]->nodes[node]->ComputeValidMoves(envs[ei]->tree.positions[node]);
+                envs[ei]->nodes[node]->AddValidMoves(envs[ei]->tree.node_valid_moves[node]);
 
                 nodes.push_back(node);
                 qnodes.push_back(envs[ei]->nodes[node]);
@@ -462,8 +462,6 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                     if (envs[ei]->beam.size() > 0)
                         break;
                     // if beam is empty - play until game is decided and add all moves to the dataset
-
-                    // envs[ei]->ComputeValidMoves(envs[ei]->tree.positions[envs[ei]->top_node]);
                 }
 
                 // usage.MarkCheckpoint("7. Finalizing");
