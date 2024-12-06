@@ -11,10 +11,10 @@ model:
     res_blocks: 3
     filters: 80
 training:
-  n_high_level_iterations: 10
+  n_high_level_iterations: 1
   q_train_sub_iterations: 1
-  v_train_episodes: 10000
-  q_train_episodes: 1000
+  v_train_episodes: 1000
+  q_train_episodes: 100
   dataset_drop_ratio: 0.5
   tree_num_q_s_a_calls: 100
   tree_max_depth: 10000

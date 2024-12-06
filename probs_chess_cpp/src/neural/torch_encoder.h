@@ -58,12 +58,46 @@ void GetQModelEstimation_Nodes(std::vector<TNode*>& result, ResNet q_model, cons
             int square = policy_idx % 64;
             int row = square / 8;
             int col = square % 8;
-            // float score = q_values[bi][displacement][row][col].item<float>();
             float score = q_values_accessor[bi][displacement][row][col];
 
             result[bi]->moves_estimation[mi].score = score;
         }
     }
+
+    // Using gather - a bit worse:
+    // torch::Tensor input = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
+    // auto input_accessor = input.accessor<float, 4>();
+    // for (int bi = 0; bi < batch_size; bi++)
+    //     FillInputTensor(input_accessor, bi, result[bi]->input_planes);
+
+    // const int MAX_NUM_POSSIBLE_MOVES = 128;
+
+    // torch::Tensor moves_idx = torch::zeros({batch_size, MAX_NUM_POSSIBLE_MOVES}, torch::kInt64);
+    // auto moves_idx_accessor = moves_idx.accessor<long, 2>();
+    // for (int bi = 0; bi < batch_size; bi++) {
+    //     for (int mi = 0; mi < std::min((int)result[bi]->moves_estimation.size(), MAX_NUM_POSSIBLE_MOVES); mi++) {
+    //         auto move = result[bi]->moves_estimation[mi].move;
+    //         int move_idx = move.as_nn_index(result[bi]->transform);
+    //         int policy_idx = move_to_policy_idx_map[move_idx];
+
+    //         moves_idx_accessor[bi][mi] = policy_idx;
+    //     }
+    // }
+
+    // input = input.to(device);
+    // moves_idx = moves_idx.to(device);
+    // torch::Tensor q_values = q_model->forward(input);
+    // q_values = q_values.view({batch_size, -1});
+    // q_values = torch::gather(q_values, 1, moves_idx);
+
+    // q_values = q_values.to(torch::kCPU);
+
+    // auto q_values_accessor = q_values.accessor<float, 2>();
+    // for (int bi = 0; bi < batch_size; bi++)
+    //     for (int mi = 0; mi < std::min((int)result[bi]->moves_estimation.size(), MAX_NUM_POSSIBLE_MOVES); mi++) {
+    //         float q_val = q_values_accessor[bi][mi];
+    //         result[bi]->moves_estimation[mi].score = q_val;
+    //     }
 }
 
 }  // namespace probs
