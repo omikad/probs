@@ -1,6 +1,7 @@
 #pragma once
 
 #include <torch/torch.h>
+#include <ATen/Device.h>
 #include <memory>
 #include <string>
 
@@ -27,6 +28,7 @@ class ModelKeeper {
         void SaveCheckpoint();
         void SetEvalMode();
         void SetTrainMode();
+        void To(const at::Device& device);
 };
 
 }   // namespace probs

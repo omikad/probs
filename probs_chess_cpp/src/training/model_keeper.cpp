@@ -102,4 +102,10 @@ void ModelKeeper::SetTrainMode() {
 }
 
 
+void ModelKeeper::To(const at::Device& device) {
+    v_model->to(device);
+    q_model->to(device);
+}
+
+
 }   // namespace probs

@@ -158,16 +158,9 @@ void ProbsImpl::GoTrain() {
     ofstream losses_file;
     losses_file.open(losses_log_filename.str());
 
-    int gpu_num = config_parser.GetInt("infra.gpu", false, -1);
-    cout << "  GPU = " << gpu_num << endl;
-    if (gpu_num >= 0) {
-        if (torch::cuda::is_available())
-            device = at::Device("cuda:" + to_string(gpu_num));
-        else
-            throw Exception("Config points to GPU which is not available (config parameter infra.gpu)");
-        model_keeper.v_model->to(device);
-        model_keeper.q_model->to(device);
-    }
+    device = GetDeviceFromConfig(config_parser);
+    cout << "  device = " << device << endl;
+    model_keeper.To(device);
     model_keeper.SetEvalMode();
 
     IPlayer* player1;
@@ -179,6 +172,7 @@ void ProbsImpl::GoTrain() {
     for (int high_level_i = 0; high_level_i < n_high_level_iterations; high_level_i++) {
         UsageCounter usage;
 
+        model_keeper.SetEvalMode();
         SelfPlayAndTrainV(usage, losses_file, v_train_episodes);
 
         for (int q_train_sub_i = 0; q_train_sub_i < q_train_sub_iterations; q_train_sub_i++) {
@@ -188,6 +182,7 @@ void ProbsImpl::GoTrain() {
 
         model_keeper.SetEvalMode();
         model_keeper.SaveCheckpoint();
+        cout << "[TRAIN] V model score on starting fen: " << GetVScoreOnStartingBoard(model_keeper.v_model, device) << endl;
         usage.MarkCheckpoint("save models");
 
         BattleInfo battle_info = ComparePlayers(*player1, *player2, evaluate_n_games, n_max_episode_steps);

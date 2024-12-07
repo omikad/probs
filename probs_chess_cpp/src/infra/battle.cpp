@@ -7,6 +7,8 @@ namespace probs {
 
 
 BattleInfo ComparePlayers(IPlayer& player1, IPlayer& player2, int evaluate_n_games, int n_max_episode_steps) {
+    torch::NoGradGuard no_grad;
+
     string starting_fen = lczero::ChessBoard::kStartposFen;
 
     BattleInfo battle_info;
@@ -88,11 +90,15 @@ void GoBattle(const ConfigParser& config_parser) {
             (pi == 1 ? player1 : player2) = new NStepLookaheadPlayer("NStepLookaheadPlayer" + to_string(pi), 3);
         else if (kind == "v_resnet_player" || kind == "q_resnet_player") {
             ModelKeeper model_keeper(config_parser, "player" + to_string(pi) + ".model");
-            if (kind == "v_resnet_player")
-                (pi == 1 ? player1 : player2) = new VResnetPlayer(model_keeper, config_parser, "player" + to_string(pi), "VResnetPlayer" + to_string(pi));
-            else if (kind == "q_resnet_player")
-                (pi == 1 ? player1 : player2) = new QResnetPlayer(model_keeper, config_parser, "player" + to_string(pi), "QResnetPlayer" + to_string(pi));
+            auto device = GetDeviceFromConfig(config_parser);
+            cout << "Device " << device << endl;
+            model_keeper.To(device);
             model_keeper.SetEvalMode();
+
+            if (kind == "v_resnet_player")
+                (pi == 1 ? player1 : player2) = new VResnetPlayer(model_keeper.v_model, device, "VResnetPlayer" + to_string(pi));
+            else if (kind == "q_resnet_player")
+                (pi == 1 ? player1 : player2) = new QResnetPlayer(model_keeper.q_model, device, "QResnetPlayer" + to_string(pi));
         }
         else {
             throw Exception("Unknown player.kind attribute value");
@@ -110,6 +116,17 @@ void GoBattle(const ConfigParser& config_parser) {
     cout << "   wins: " << battle_info.results[0][0] << ", " << battle_info.results[0][1] << endl;
     cout << "  draws: " << battle_info.results[1][0] << ", " << battle_info.results[1][1] << endl;
     cout << " losses: " << battle_info.results[2][0] << ", " << battle_info.results[2][1] << endl;
+
+    int w1 = battle_info.results[0][0] + battle_info.results[0][1];
+    int d1 = battle_info.results[1][0] + battle_info.results[1][1];
+    int l1 = battle_info.results[2][0] + battle_info.results[2][1];
+    double games = w1 + d1 + l1;
+    double player1_score = (w1 + (double)d1 / 2) / games;
+
+    double w2 = games - w1 - d1;
+    double player2_score = (w2 + (double)d1 / 2) / games;
+    cout << "Player " << player1->GetName() << " score=" << player1_score << endl;
+    cout << "Player " << player2->GetName() << " score=" << player2_score << endl;
 
     delete player1;
     delete player2;

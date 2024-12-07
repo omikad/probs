@@ -103,4 +103,26 @@ shared_ptr<EncodedPositionBatch> GetQModelEstimation(const vector<PositionHistor
     return make_shared<EncodedPositionBatch>(result);
 }
 
+
+float GetVScoreOnStartingBoard(ResNet v_model, const at::Device& device) {
+    auto tree = PositionHistoryTree(lczero::ChessBoard::kStartposFen, 100);
+
+    vector<int> nodes{0};
+    int transform_out;
+    auto input_planes = Encode(tree, nodes, &transform_out);
+
+    torch::Tensor input = torch::zeros({1, lczero::kInputPlanes, 8, 8});
+    auto input_accessor = input.accessor<float, 4>();
+
+    FillInputTensor(input_accessor, 0, input_planes);
+
+    input = input.to(device);
+    torch::Tensor prediction = v_model->forward(input);
+    prediction = prediction.to(torch::kCPU);
+
+    float score = prediction[0].item<float>();
+    return score;
+}
+
+
 }  // namespace probs

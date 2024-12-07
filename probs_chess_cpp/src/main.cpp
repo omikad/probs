@@ -45,6 +45,9 @@ int main(int argc, char* argv[]) {
         else if (command == "test_V_predict_self_play") {
             probs::V_predict_self_play(config);
         }
+        else if (command == "test_show_v_starting_estimation") {
+            probs::ShowVModelStartingFenEstimation(config);
+        }
         else
             throw probs::Exception("Unknown command " + command);
     } catch (const exception& e) {

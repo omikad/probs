@@ -19,8 +19,10 @@
 #include "utils/ts_queue.h"
 #include "utils/usage_counter.h"
 #include "training/model_keeper.h"
+#include "training/training_helpers.h"
 #include "training/v_train.h"
 #include "training/q_train.h"
+#include "neural/torch_encoder.h"
 
 
 namespace probs {

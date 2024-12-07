@@ -89,21 +89,10 @@ vector<lczero::Move> NStepLookaheadPlayer::GetActions(vector<PositionHistoryTree
 }
 
 
-VResnetPlayer::VResnetPlayer(ModelKeeper& model_keeper, const ConfigParser& config_parser, const string& config_key_prefix, const string& name):
-        name(name),
-        device(torch::kCPU),
-        v_model(config_parser, config_key_prefix + ".model.v", true) {
-
-    int gpu_num = config_parser.GetInt("infra.gpu", false, -1);
-    cout << "VResnetPlayer GPU: " << gpu_num << endl;
-    if (gpu_num >= 0) {
-        if (torch::cuda::is_available())
-            device = at::Device("cuda:" + to_string(gpu_num));
-        else
-            throw Exception("Config points to GPU which is not available (config parameter infra.gpu)");
-        v_model->to(device);
-    }
-
+VResnetPlayer::VResnetPlayer(ResNet v_model, at::Device& device, const std::string& name):
+        v_model(v_model),
+        device(device),
+        name(name) {
     cout << DebugString(*v_model) << endl;
 }
 
@@ -155,24 +144,7 @@ vector<lczero::Move> VResnetPlayer::GetActions(vector<PositionHistoryTree*>& his
 }
 
 
-QResnetPlayer::QResnetPlayer(ResNet q_model, at::Device& device, const std::string& name) : name(name), q_model(q_model), device(device) {}
-
-
-QResnetPlayer::QResnetPlayer(ModelKeeper& model_keeper, const ConfigParser& config_parser, const string& config_key_prefix, const string& name):
-        name(name),
-        device(torch::kCPU),
-        q_model(config_parser, config_key_prefix + ".model.q", false) {
-
-    int gpu_num = config_parser.GetInt("infra.gpu", false, -1);
-    cout << "QResnetPlayer GPU: " << gpu_num << endl;
-    if (gpu_num >= 0) {
-        if (torch::cuda::is_available())
-            device = at::Device("cuda:" + to_string(gpu_num));
-        else
-            throw Exception("Config points to GPU which is not available (config parameter infra.gpu)");
-        q_model->to(device);
-    }
-
+QResnetPlayer::QResnetPlayer(ResNet q_model, at::Device& device, const std::string& name) : name(name), q_model(q_model), device(device) {
     cout << DebugString(*q_model) << endl;
 }
 

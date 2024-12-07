@@ -93,4 +93,18 @@ void V_predict_self_play(const ConfigParser& config_parser) {
 }
 
 
+void ShowVModelStartingFenEstimation(const ConfigParser& config_parser) {
+    torch::NoGradGuard no_grad;
+
+    ModelKeeper model_keeper(config_parser, "player1.model");
+
+    at::Device device = GetDeviceFromConfig(config_parser);
+    model_keeper.To(device);
+    model_keeper.SetEvalMode();
+
+    float vval = GetVScoreOnStartingBoard(model_keeper.v_model, device);
+    cout << "V model estimation for starting fen: " << vval << endl;
+}
+
+
 }   // namespace probs

@@ -100,4 +100,6 @@ void GetQModelEstimation_Nodes(std::vector<TNode*>& result, ResNet q_model, cons
     //     }
 }
 
+float GetVScoreOnStartingBoard(ResNet v_model, const at::Device& device);
+
 }  // namespace probs

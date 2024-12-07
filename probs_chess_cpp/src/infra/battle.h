@@ -9,6 +9,7 @@
 #include "infra/player.h"
 #include "utils/exception.h"
 #include "utils/callbacks.h"
+#include "training/training_helpers.h"
 
 
 namespace probs {

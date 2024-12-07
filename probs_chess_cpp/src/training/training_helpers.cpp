@@ -51,4 +51,17 @@ lczero::Move GetMoveWithExploration(const vector<MoveEstimation>& moves_estimati
     return moves_estimation[best_i].move;
 }
 
+
+at::Device GetDeviceFromConfig(const ConfigParser& config_parser) {
+    int gpu_num = config_parser.GetInt("infra.gpu", false, -1);
+    if (gpu_num >= 0) {
+        if (torch::cuda::is_available())
+            return at::Device("cuda:" + to_string(gpu_num));
+        else
+            throw Exception("Config points to GPU which is not available (config parameter infra.gpu)");
+    }
+    return torch::kCPU;
+}
+
+
 }  // namespace probs
