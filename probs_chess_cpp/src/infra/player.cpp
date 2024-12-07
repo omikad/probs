@@ -127,6 +127,7 @@ vector<lczero::Move> VResnetPlayer::GetActions(vector<PositionHistoryTree*>& his
         input = input.to(device);
 
         torch::Tensor predictions = v_model->forward(input);
+        predictions = predictions.to(torch::kCPU);
         predictions = predictions.contiguous();
         vector<float> values(predictions.data_ptr<float>(), predictions.data_ptr<float>() + predictions.numel());
         assert(values.size() == moves.size());

@@ -14,7 +14,7 @@
 
 namespace probs {
 
-BattleInfo ComparePlayers(IPlayer& player1, IPlayer& player2, int evaluate_n_games, int n_max_episode_steps);
+BattleInfo ComparePlayers(IPlayer& player1, IPlayer& player2, int evaluate_n_games, int n_max_episode_steps, int random_first_turns = 0);
 
 void GoBattle(const ConfigParser &config_parser);
 

@@ -18,9 +18,21 @@ player1:
 
 player2:
   # kind: "random"
-  kind: "one_step_lookahead"
+  # kind: "one_step_lookahead"
   # kind: "two_step_lookahead"
-
+  kind: "q_resnet_player"
+  model:
+    v:
+      type: resnet
+      res_blocks: 3
+      filters: 80
+    q:
+      type: resnet
+      res_blocks: 3
+      filters: 80
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241207-205615*'
+battle:
+  random_first_turns: 2
 env:
   n_max_episode_steps: 500
 infra:

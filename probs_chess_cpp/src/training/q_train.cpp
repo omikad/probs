@@ -502,7 +502,11 @@ void TrainQ(const ConfigParser& config_parser, ofstream& losses_file, ResNet q_m
         auto input_accessor = input.accessor<float, 4>();
 
         torch::Tensor target_vals = torch::zeros({batch_size, lczero::kNumOutputPolicyFilters, 8, 8});
+        auto target_vals_accessor = target_vals.accessor<float, 4>();
+
         torch::Tensor target_mask = torch::zeros({batch_size, lczero::kNumOutputPolicyFilters, 8, 8});
+        auto target_mask_accessor = target_mask.accessor<float, 4>();
+
         int actions_mask_norm = 0;
 
         for (int ri = end - batch_size; ri < end; ri++) {
@@ -516,8 +520,8 @@ void TrainQ(const ConfigParser& config_parser, ofstream& losses_file, ResNet q_m
                 int square = policy_idx % 64;
                 int row = square / 8;
                 int col = square % 8;
-                target_vals[bi][displacement][row][col] = move_target.score;
-                target_mask[bi][displacement][row][col] = 1;
+                target_vals_accessor[bi][displacement][row][col] = move_target.score;
+                target_mask_accessor[bi][displacement][row][col] = 1;
                 actions_mask_norm++;
             }
 

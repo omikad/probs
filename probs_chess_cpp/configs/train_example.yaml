@@ -11,7 +11,7 @@ model:
     res_blocks: 3
     filters: 80
 training:
-  n_high_level_iterations: 20
+  n_high_level_iterations: 50
   q_train_sub_iterations: 1
   v_train_episodes: 1000
   q_train_episodes: 500
@@ -26,7 +26,7 @@ training:
   checkpoints_dir: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints'
 
   # resume from checkpoint:
-  # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241127-181135*'
+  checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241207-092128*'
 
   is_test: 0    # apply various checks on each iteration
 infra:

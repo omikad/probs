@@ -78,6 +78,8 @@
         "*.inc": "cpp",
         "buffer": "cpp",
         "internet": "cpp",
-        "socket": "cpp"
+        "socket": "cpp",
+        "io_context": "cpp",
+        "executor": "cpp"
     }
 }

@@ -6,8 +6,10 @@ using namespace std;
 namespace probs {
 
 
-BattleInfo ComparePlayers(IPlayer& player1, IPlayer& player2, int evaluate_n_games, int n_max_episode_steps) {
+BattleInfo ComparePlayers(IPlayer& player1, IPlayer& player2, int evaluate_n_games, int n_max_episode_steps, int random_first_turns) {
     torch::NoGradGuard no_grad;
+
+    RandomPlayer random_player = RandomPlayer("RandomPlayer");
 
     string starting_fen = lczero::ChessBoard::kStartposFen;
 
@@ -32,8 +34,8 @@ BattleInfo ComparePlayers(IPlayer& player1, IPlayer& player2, int evaluate_n_gam
             if (alive[i])
                 (i % 2 == step_i % 2 ? trees1 : trees2).push_back(trees[i]);
 
-        vector<lczero::Move> moves1 = player1.GetActions(trees1);
-        vector<lczero::Move> moves2 = player2.GetActions(trees2);
+        vector<lczero::Move> moves1 = step_i < random_first_turns ? random_player.GetActions(trees1) : player1.GetActions(trees1);
+        vector<lczero::Move> moves2 = step_i < random_first_turns ? random_player.GetActions(trees2) : player2.GetActions(trees2);
 
         for (int i = 0; i < trees1.size(); i++) trees1[i]->Move(-1, moves1[i]);
         for (int i = 0; i < trees2.size(); i++) trees2[i]->Move(-1, moves2[i]);
@@ -75,6 +77,8 @@ BattleInfo ComparePlayers(IPlayer& player1, IPlayer& player2, int evaluate_n_gam
 void GoBattle(const ConfigParser& config_parser) {
     torch::NoGradGuard no_grad;
 
+    int random_first_turns = config_parser.GetInt("battle.random_first_turns", false, 0);
+
     IPlayer* player1;
     IPlayer* player2;
 
@@ -108,9 +112,10 @@ void GoBattle(const ConfigParser& config_parser) {
     int evaluate_n_games = config_parser.GetInt("infra.evaluate_n_games", true, 0);
     int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps", true, 0);
 
-    BattleInfo battle_info = ComparePlayers(*player1, *player2, evaluate_n_games, n_max_episode_steps);
+    BattleInfo battle_info = ComparePlayers(*player1, *player2, evaluate_n_games, n_max_episode_steps, random_first_turns);
 
     cout << "Battle " << player1->GetName() << " vs " << player2->GetName() << ":" << endl;
+    cout << "Number of random first turns: " << random_first_turns << endl;
     cout << "Games played: " << battle_info.games_played << endl;
     cout << "Player " << player1->GetName() << " stats [white,black]:" << endl;
     cout << "   wins: " << battle_info.results[0][0] << ", " << battle_info.results[0][1] << endl;
