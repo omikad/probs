@@ -14,7 +14,7 @@ player1:
       type: resnet
       res_blocks: 3
       filters: 80
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241207-092128*'
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/picked_checkpoints/ckpt_20241208-100600*'
 
 player2:
   # kind: "random"
@@ -30,7 +30,7 @@ player2:
       type: resnet
       res_blocks: 3
       filters: 80
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241207-205615*'
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/picked_checkpoints/ckpt_20241209-093125*'
 battle:
   random_first_turns: 2
 env:
