@@ -14,7 +14,7 @@ player1:
       type: resnet
       res_blocks: 3
       filters: 80
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/picked_checkpoints/ckpt_20241208-100600*'
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/picked_checkpoints/ckpt_20241209-093125*'
 
 player2:
   # kind: "random"
@@ -24,17 +24,17 @@ player2:
   model:
     v:
       type: resnet
-      res_blocks: 3
-      filters: 80
+      res_blocks: 11
+      filters: 96
     q:
       type: resnet
-      res_blocks: 3
-      filters: 80
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/picked_checkpoints/ckpt_20241209-093125*'
+      res_blocks: 11
+      filters: 96
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/picked_checkpoints/ckpt_20241213-021452*'
 battle:
   random_first_turns: 2
 env:
   n_max_episode_steps: 500
 infra:
   gpu: 0                               # gpu id, use -1 for cpu
-  evaluate_n_games: 1000
+  evaluate_n_games: 10000

@@ -4,17 +4,17 @@ env:
 model:
   v:
     type: resnet
-    res_blocks: 3
-    filters: 80
+    res_blocks: 11
+    filters: 96
   q:
     type: resnet
-    res_blocks: 3
-    filters: 80
+    res_blocks: 11
+    filters: 96
 training:
-  n_high_level_iterations: 100
+  n_high_level_iterations: 150
   q_train_sub_iterations: 1
-  v_train_episodes: 1000
-  q_train_episodes: 500
+  v_train_episodes: 5000
+  q_train_episodes: 1000
   dataset_drop_ratio: 0.5
   tree_num_q_s_a_calls: 50
   tree_max_depth: 10000
@@ -26,7 +26,7 @@ training:
   checkpoints_dir: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints'
 
   # resume from checkpoint:
-  # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241207-092128*'
+  checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/picked_checkpoints/ckpt_20241213-021452*'
 
   is_test: 0    # apply various checks on each iteration
 infra:
