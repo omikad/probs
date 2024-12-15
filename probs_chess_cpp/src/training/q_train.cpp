@@ -131,7 +131,8 @@ struct EnvExpandState {
                 kid_qnode->state = NodeState::TERMINAL;
             }
             else if (node_depth + 1 < max_depth) {
-                float kid_priority = node_depth == 0 ? 1000.0 : q_estimation_score;    // always expand first turn
+                // float kid_priority = node_depth == 0 ? 1000.0 : q_estimation_score;    // always expand first turn
+                float kid_priority = q_estimation_score;
                 beam.insert({{kid_priority, kid_node}, kid_node});
                 kid_qnode->state = NodeState::FRONTIER;
             }
@@ -246,7 +247,8 @@ struct EnvExpandState {
 
             if (nodes[node]->state != NodeState::EXPANDED) {
                 float priority;
-                if (node == new_top_node || tree.parents[node] == new_top_node)
+                // if (node == new_top_node || tree.parents[node] == new_top_node)   // always expand first turn
+                if (node == new_top_node)
                     priority = 1000;
                 else {
                     assert (old_priorities.find(node) != old_priorities.end());
@@ -386,7 +388,6 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                 qnode->state = NodeState::FRONTIER_Q_COMPUTED;
             }
 
-
             for (int ei = 0; ei < envs.size(); ei++)
                 envs[ei]->ExpandNodeAfterQComputed(nodes[ei], tree_max_depth);
 
@@ -395,7 +396,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
             for (int ei = envs.size() - 1; ei >= 0; ei--) {
                 envs[ei]->n_qsa_calls++;
                 
-                if (envs[ei]->node_going_to_dataset && envs[ei]->beam.size() > 0 && envs[ei]->n_qsa_calls < tree_num_q_s_a_calls)    // need expand more
+                if (envs[ei]->beam.size() > 0 && envs[ei]->n_qsa_calls < tree_num_q_s_a_calls)    // need expand more
                     continue;
 
                 // usage.MarkCheckpoint("5. Pre compute V");
