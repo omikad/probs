@@ -72,6 +72,7 @@ struct EnvExpandState {
     map<pair<float, int>, int> beam;        // (priority, node) -> node
     vector<QTrainNode*> nodes;
     int n_qsa_calls;
+    bool node_going_to_dataset;
 
     EnvExpandState(string start_pos, int n_max_episode_steps)
             : tree(PositionHistoryTree(lczero::ChessBoard::kStartposFen, n_max_episode_steps)) {
@@ -332,7 +333,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
     v_model->eval();
     q_model->eval();
 
-    int batch_size = config_parser.GetInt("training.batch_size", true, 0);
+    int batch_size = config_parser.GetInt("training.q_self_play_batch_size", true, 0);
     int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps", true, 0);
     double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio", false, 0);
     int exploration_num_first_moves = config_parser.GetInt("training.exploration_num_first_moves", true, 0);
@@ -353,6 +354,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 
         if (envs.size() < batch_size && game_idx < n_games) {
             EnvExpandState* env = new EnvExpandState(lczero::ChessBoard::kStartposFen, n_max_episode_steps);
+            env->node_going_to_dataset = true;
             envs.push_back(env);
             tree_rows.push_back({});
             game_idx++;
@@ -393,7 +395,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
             for (int ei = envs.size() - 1; ei >= 0; ei--) {
                 envs[ei]->n_qsa_calls++;
                 
-                if (envs[ei]->beam.size() > 0 && envs[ei]->n_qsa_calls < tree_num_q_s_a_calls)    // need expand more
+                if (envs[ei]->node_going_to_dataset && envs[ei]->beam.size() > 0 && envs[ei]->n_qsa_calls < tree_num_q_s_a_calls)    // need expand more
                     continue;
 
                 // usage.MarkCheckpoint("5. Pre compute V");
@@ -406,7 +408,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                     int prev_top_node = envs[ei]->top_node;
                     assert(envs[ei]->tree.GetGameResult(prev_top_node) == lczero::GameResult::UNDECIDED);
 
-                    if (rand() % 1000000 > dataset_drop_ratio * 1000000) {
+                    if (envs[ei]->node_going_to_dataset) {
                         QTrainNode* qnode = envs[ei]->nodes[prev_top_node];
 
                         tree_rows[ei].push_back({ rows.size(), prev_top_node });
@@ -432,6 +434,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                     } 
 
                     envs[ei]->MoveTopNode(exploration_full_random, exploration_num_first_moves);
+                    envs[ei]->node_going_to_dataset = rand() % 1000000 > dataset_drop_ratio * 1000000;
 
                     if (is_test) {
                         int n_subtree_nodes_after_move = envs[ei]->BFS(envs[ei]->top_node).size();
