@@ -67,6 +67,12 @@ void UciPlayer::startSearch(
         cerr << "search_moves=["; for (auto& move : search_moves) cerr << " " << move; cerr << " ]" << endl;
     }
 
+    auto legal_moves = tree.LastPosition().GetBoard().GenerateLegalMoves();
+    int mi = rand() % legal_moves.size();
+
+    cout << "bestmove " << legal_moves[mi].as_string() << "\n";
+    cout << flush;
+
     is_in_search = false;
 }
 
