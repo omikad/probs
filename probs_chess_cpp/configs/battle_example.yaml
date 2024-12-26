@@ -14,7 +14,10 @@ player1:
       type: resnet
       res_blocks: 11
       filters: 96
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/picked_checkpoints/ckpt_20241213-021452*'
+    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/picked_checkpoints/ckpt_20241213-021452*'
+    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241219-103526*'
+    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241222-173728*'
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241224-104436*'
 
 player2:
   # kind: "random"
@@ -30,7 +33,8 @@ player2:
       type: resnet
       res_blocks: 11
       filters: 96
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241215-112917*'
+    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241222-173728*'
+    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241225-104038*'
 
   # kind: "q_resnet_player"
   # model:

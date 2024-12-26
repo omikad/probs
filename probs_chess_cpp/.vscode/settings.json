@@ -80,6 +80,7 @@
         "internet": "cpp",
         "socket": "cpp",
         "io_context": "cpp",
-        "executor": "cpp"
+        "executor": "cpp",
+        "future": "cpp"
     }
 }
