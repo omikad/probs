@@ -20,11 +20,40 @@ void UciPlayer::onNewGame() {
 
 void UciPlayer::setPosition(const string& starting_fen, const vector<string>& moves) {
     assert(is_in_search == false);
-    tree = PositionHistoryTree(starting_fen, n_max_episode_steps);
-    for (auto& move : moves)
-        tree.Move(-1, lczero::Move(move, tree.LastPosition().IsBlackToMove()));
+
+    bool continuation = false;
+    if (last_pos_fen == starting_fen && last_pos_moves.size() < moves.size()) {
+        bool eq = true;
+        for (int i = 0; i < (int)last_pos_moves.size(); i++)
+            if (moves[i] != last_pos_moves[i]) {
+                eq = false;
+                break;
+            }
+
+        if (eq)
+            continuation = true;
+    }
+
+    if (continuation) {
+        for (int i = last_pos_moves.size(); i < (int)moves.size(); i++) {
+            auto& move = moves[i];
+            tree.Move(-1, lczero::Move(move, tree.LastPosition().IsBlackToMove()));
+            last_pos_moves.push_back(move);
+        }
+    }
+    else {
+        last_pos_fen = starting_fen;
+        last_pos_moves.clear();
+
+        tree = PositionHistoryTree(starting_fen, n_max_episode_steps);
+        for (auto& move : moves) {
+            tree.Move(-1, lczero::Move(move, tree.LastPosition().IsBlackToMove()));
+            last_pos_moves.push_back(move);
+        }
+    }
+
     if (debug_on)
-        cerr << "current position debug:\n" << tree.LastPosition().DebugString() << endl;
+        cerr << "[DEBUG] Current position:\n" << tree.LastPosition().DebugString() << endl;
 }
 
 
@@ -68,9 +97,13 @@ void UciPlayer::startSearch(
     }
 
     auto legal_moves = tree.LastPosition().GetBoard().GenerateLegalMoves();
-    int mi = rand() % legal_moves.size();
+    auto move = legal_moves[rand() % legal_moves.size()];
 
-    cout << "bestmove " << legal_moves[mi].as_string() << "\n";
+    move = tree.LastPosition().GetBoard().GetLegacyMove(move);
+    if (tree.LastPosition().IsBlackToMove())
+        move.Mirror();
+
+    cout << "bestmove " << move.as_string() << "\n";
     cout << flush;
 
     is_in_search = false;

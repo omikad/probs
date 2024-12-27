@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
         if (argc == 1) {
             ConfigParser config(getUciEngineConfig());
 
-            while (true) {
+            for (int cmdi = 0; cmdi < 10; cmdi++) {
                 string command;
                 cin >> command;
 

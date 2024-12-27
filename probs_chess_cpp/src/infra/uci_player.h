@@ -45,6 +45,8 @@ class UciPlayer {
         std::atomic<bool> is_in_search;
         std::atomic<bool> stop_search_flag;
         std::future<void> search_future;
+        std::string last_pos_fen;
+        std::vector<std::string> last_pos_moves;
 };
 
 }  // namespace probs
