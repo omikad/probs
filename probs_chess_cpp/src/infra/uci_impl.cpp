@@ -13,7 +13,7 @@ UciImpl::UciImpl(ConfigParser& config) : uci_player(config) {
 }
 
 
-void UciImpl::run() {
+void UciImpl::Run() {
     while (true) {
         string input_line;
         getline(cin, input_line);
@@ -23,33 +23,33 @@ void UciImpl::run() {
         line_stream >> command;
 
         if (command == "isready") {
-            uci_player.waitForReadyState();
+            uci_player.WaitForReadyState();
             cout << "readyok" << "\n";
             cout << flush;
         }
         else if (command == "ucinewgame") {
-            uci_player.onNewGame();
+            uci_player.OnNewGame();
         }
         else if (command == "position") {
-            onPositionCommand(line_stream);
+            OnPositionCommand(line_stream);
         }
         else if (command == "go") {
-            onGoCommand(line_stream);
+            OnGoCommand(line_stream);
         }
         else if (command == "stop") {
-            uci_player.stop();
+            uci_player.Stop();
         }
         else if (command == "quit") {
-            uci_player.stop();
+            uci_player.Stop();
             break;
         }
         else if (command == "debug") {
             string on_off;
             line_stream >> on_off;
             if (on_off == "on")
-                uci_player.setDebug(true);
+                uci_player.SetDebug(true);
             else
-                uci_player.setDebug(false);
+                uci_player.SetDebug(false);
         }
         else if (command == "register") {
             cerr << "TODO: " << command << endl;
@@ -70,7 +70,7 @@ void UciImpl::run() {
 }
 
 
-void UciImpl::onPositionCommand(stringstream& line_stream) {
+void UciImpl::OnPositionCommand(stringstream& line_stream) {
     string pos_string;
     vector<string> moves;
     bool is_reading_moves = false;
@@ -88,11 +88,11 @@ void UciImpl::onPositionCommand(stringstream& line_stream) {
         else
             cerr << "WARNING: 'position' command unexpected token: '" << token << "'" << endl;
     }
-    uci_player.setPosition(pos_string, moves);
+    uci_player.SetPosition(pos_string, moves);
 }
 
 
-void UciImpl::onGoCommand(stringstream& line_stream) {
+void UciImpl::OnGoCommand(stringstream& line_stream) {
     vector<string> search_moves;
     bool is_reading_moves = false;
     optional<chrono::milliseconds> wtime = nullopt;
@@ -181,8 +181,7 @@ void UciImpl::onGoCommand(stringstream& line_stream) {
             cerr << "WARNING: 'go' command unexpected token: '" << token << "'" << endl;
     }
 
-    uci_player.startSearch(
-        is_reading_moves,
+    uci_player.StartSearch(
         wtime,
         btime,
         winc,

@@ -17,12 +17,12 @@ namespace probs {
 class UciImpl {
     public:
         UciImpl(ConfigParser& config);
-        void run();
+        void Run();
 
     private:
         UciPlayer uci_player;
-        void onPositionCommand(std::stringstream& line_stream);
-        void onGoCommand(std::stringstream& line_stream);
+        void OnPositionCommand(std::stringstream& line_stream);
+        void OnGoCommand(std::stringstream& line_stream);
 };
 
 }  // namespace probs

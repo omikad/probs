@@ -1,6 +1,9 @@
+import time
 import numpy as np
 import subprocess
 import chess
+import os
+import signal
 
 
 class UciChess:
@@ -28,31 +31,24 @@ class UciChess:
             if resp.startswith(resp_wait_prefix):
                 return resp
         raise Exception(f"Can't find response starting with {resp_wait_prefix} out of {wait_cnt} responses")
+    
+    def close(self):
+        # os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+        self.process.kill()
 
 
-if __name__ == "__main__":
-    np.random.seed(111)
-    # GAMES, STEPS, VERBOSE = 2, 10, True
-    GAMES, STEPS, VERBOSE = 1000, 500, False
-
-    proc = UciChess(verbose=VERBOSE)
-    proc.write("uci")
-    proc.read_until('uciok', 1000)
-
-    proc.write('isready')
-    proc.read_until('readyok', 1000)
-
+def play_games(n_games, n_steps):
     outcomes = [[0] * 3 for _ in range(2)]
     # outcomes[0] is engine as white [wins, loses, draws]
     # outcomes[1] si engine as black [wins, loses, draws]
 
-    for gi in range(GAMES):
+    for gi in range(n_games):
         chess_env = chess.Board()
         proc.write('ucinewgame')
 
         moves = []
 
-        for si in range(STEPS):
+        for si in range(n_steps):
             chess_legal_moves = [str(m) for m in chess_env.legal_moves]
             if (si + gi) % 2 == 1:
                 move = chess_legal_moves[np.random.randint(len(chess_legal_moves))]
@@ -91,4 +87,27 @@ if __name__ == "__main__":
 
     print(f"Engine as white: wins,draws,loses={outcomes[0]}")
     print(f"Engine as black: wins,draws,loses={outcomes[1]}")
+
+
+if __name__ == "__main__":
+    np.random.seed(111)
+    # GAMES, STEPS, VERBOSE = 20, 500, True
+    GAMES, STEPS, VERBOSE = 100, 500, False
+
+    proc = UciChess(verbose=VERBOSE)
+
+    try:
+        proc.write("uci")
+        proc.read_until('uciok', 1000)
+
+        proc.write('isready')
+        proc.read_until('readyok', 1000)
+
+        play_games(GAMES, STEPS)
+
+        proc.write('quit')
+        time.sleep(0.5)
+    finally:
+        proc.close()
+
     print('Done')

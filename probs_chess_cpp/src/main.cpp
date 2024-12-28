@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
 
                 if (command == "uci") {
                     probs::UciImpl uci(config);
-                    uci.run();
+                    uci.Run();
                     break;
                 }
             }
