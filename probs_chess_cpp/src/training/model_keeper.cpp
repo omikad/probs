@@ -35,7 +35,8 @@ ModelKeeper::ModelKeeper(const ConfigParser& config_parser, const string& model_
         string filename = config_parser.GetString(model_key + ".checkpoint");
 
         if (filename.size() > 0 && filename.back() == '*') {
-            cout << "[MODEL_KEEPER] Models V and Q loaded from " << filename << endl;
+            if (config_parser.GetInt("infra.uci_mode", false, 0) == 0)
+                cout << "[MODEL_KEEPER] Models V and Q loaded from " << filename << endl;
             filename.pop_back();
             torch::load(v_model, filename + "_v.ckpt");
             torch::load(q_model, filename + "_q.ckpt");

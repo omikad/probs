@@ -5,6 +5,7 @@ using namespace std;
 
 namespace probs {
 
+
 UciImpl::UciImpl(ConfigParser& config) : uci_player(config) {
     cout << "id name Probs v1.0" << "\n";
     cout << "id author Sergey P" << "\n";

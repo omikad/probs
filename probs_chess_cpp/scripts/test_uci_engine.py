@@ -2,8 +2,6 @@ import time
 import numpy as np
 import subprocess
 import chess
-import os
-import signal
 
 
 class UciChess:
@@ -91,7 +89,7 @@ def play_games(n_games, n_steps):
 
 if __name__ == "__main__":
     np.random.seed(111)
-    # GAMES, STEPS, VERBOSE = 20, 500, True
+    # GAMES, STEPS, VERBOSE = 1, 5, True
     GAMES, STEPS, VERBOSE = 100, 500, False
 
     proc = UciChess(verbose=VERBOSE)

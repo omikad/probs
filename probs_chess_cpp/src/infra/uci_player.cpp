@@ -23,7 +23,7 @@ int UciPlayer::AppendLastTreeNode() {
     }
     else {
         node.is_terminal = false;
-        node.v_tree_score = 0;
+        node.v_tree_score = -1000;
     }
     nodes.push_back(node);
     assert(nodes.size() == tree.positions.size());
@@ -33,10 +33,20 @@ int UciPlayer::AppendLastTreeNode() {
 
 UciPlayer::UciPlayer(ConfigParser& config)
         : n_max_episode_steps(config.GetInt("env.n_max_episode_steps", true, 0))
+        , q_agent_batch_size(config.GetInt("infra.q_agent_batch_size", true, 0))
         , tree(lczero::ChessBoard::kStartposFen, n_max_episode_steps)
         , is_in_search(false)
         , stop_search_flag(false)
-        , debug_on(false) {
+        , debug_on(false)
+        , q_model(nullptr)
+        , device(torch::kCPU) {
+
+    ModelKeeper model_keeper(config, "model");
+    device = GetDeviceFromConfig(config);
+    model_keeper.To(device);
+    model_keeper.SetEvalMode();
+    q_model = model_keeper.q_model;
+
     top_node = AppendLastTreeNode();
 }
 
@@ -76,6 +86,7 @@ void UciPlayer::SetPosition(const string& starting_fen, const vector<string>& mo
         nodes.clear();
         tree = PositionHistoryTree(starting_fen, n_max_episode_steps);
         top_node = AppendLastTreeNode();
+        assert(top_node == 0);
     }
 
     for (int i = last_pos_moves.size(); i < (int)moves.size(); i++) {
@@ -86,11 +97,11 @@ void UciPlayer::SetPosition(const string& starting_fen, const vector<string>& mo
         move = tree.positions[top_node].GetBoard().GetModernMove(move);
 
         int ki = FindKidIndex(top_node, move);
-        // if (ki < 0) {
-        //     cerr << move_str << endl;
-        //     cerr << "tree:"; for (auto& kid_move : tree.node_valid_moves[top_node]) cerr << kid_move.as_string(); cerr << endl;
-        //     cerr << "kids:"; for (auto& kid : nodes[top_node].kids) cerr << kid.move.as_string(); cerr << endl;
-        // }
+        if (ki < 0) {
+            cerr << move_str << endl;
+            cerr << "tree:"; for (auto& kid_move : tree.node_valid_moves[top_node]) cerr << " " << kid_move.as_string(); cerr << endl;
+            cerr << "kids:"; for (auto& kid : nodes[top_node].kids) cerr << " " << kid.move.as_string(); cerr << endl;
+        }
         assert(ki >= 0);
 
         int new_top_node;
@@ -99,8 +110,9 @@ void UciPlayer::SetPosition(const string& starting_fen, const vector<string>& mo
             new_top_node = AppendLastTreeNode();
             nodes[top_node].kids[ki].kid_node = new_top_node;
         }
-        else
+        else {
             new_top_node = nodes[top_node].kids[ki].kid_node;
+        }
 
         top_node = new_top_node;
         last_pos_moves.push_back(move_str);
@@ -113,6 +125,71 @@ void UciPlayer::SetPosition(const string& starting_fen, const vector<string>& mo
 
 void UciPlayer::Stop() {
     stop_search_flag = true;
+}
+
+
+void UciPlayer::EstimateNodesActions(const vector<int>& nodes_to_estimate) {
+    int batch_size = nodes_to_estimate.size();
+
+    vector<int> transform_out(batch_size);
+    vector<lczero::InputPlanes> planes(batch_size);
+
+    vector<int> history_nodes;
+    for (int bi = 0; bi < batch_size; bi++) {
+        int node = nodes_to_estimate[bi];
+        if (bi == 0)
+            history_nodes = tree.GetHistoryPathNodes(node);
+        else {
+            // assuming all nodes are from subtree of top_node - recompute only subtree part
+            int ply = tree.positions[node].GetGamePly();
+            while (history_nodes.size() > ply + 1) history_nodes.pop_back();
+            while (history_nodes.size() < ply + 1) history_nodes.push_back(0);
+
+            int j = ply;
+            int runnode = node;
+            while (runnode != top_node) {
+                assert(runnode >= 0);
+                assert(j >= 0);
+                history_nodes[j] = runnode;
+                runnode = tree.parents[runnode];
+                j--;
+            }
+
+            // TODO: remove
+            vector<int> expected = tree.GetHistoryPathNodes(node);
+            assert(expected.size() == history_nodes.size());
+            for (int ii = 0; ii < expected.size(); ii++) assert(expected[ii] == history_nodes[ii]);
+        }
+
+        planes[bi] = Encode(tree, history_nodes, &transform_out[bi]);
+    }
+
+    torch::Tensor input = torch::zeros({batch_size, lczero::kInputPlanes, 8, 8});
+    auto input_accessor = input.accessor<float, 4>();
+
+    for (int bi = 0; bi < batch_size; bi++)
+        FillInputTensor(input_accessor, bi, planes[bi]);
+
+    input = input.to(device);
+    torch::Tensor q_values = q_model->forward(input);
+    q_values = q_values.to(torch::kCPU);
+    auto q_values_accessor = q_values.accessor<float, 4>();
+
+    for (int bi = 0; bi < batch_size; bi++) {
+        int node = nodes_to_estimate[bi];
+        for (auto& kid_info : nodes[node].kids) {
+            auto move = kid_info.move;
+            int move_idx = move.as_nn_index(transform_out[bi]);
+            int policy_idx = move_to_policy_idx_map[move_idx];
+            int displacement = policy_idx / 64;
+            int square = policy_idx % 64;
+            int row = square / 8;
+            int col = square % 8;
+            float score = q_values_accessor[bi][displacement][row][col];
+
+            kid_info.q_nn_score = score;
+        }
+    }
 }
 
 
@@ -149,16 +226,77 @@ void UciPlayer::StartSearch(
 
     assert(!nodes[top_node].is_terminal);
 
-    int ki = rand() % nodes[top_node].kids.size();
+    map<pair<float, int>, int> beam; // {(priority, node) -> node}
+    beam.insert({{1000.0, top_node}, top_node});
 
-    auto move = nodes[top_node].kids[ki].move;
+    for (int step_i = 0 ; step_i < 10; step_i++) {
+
+        vector<int> nodes_to_expand;
+        while (nodes_to_expand.size() < q_agent_batch_size && beam.size() > 0) {
+            int node = beam.rbegin()->second;
+            nodes_to_expand.push_back(node);
+            beam.erase(prev(beam.end()));
+        }
+        if (nodes_to_expand.size() == 0) break;
+
+        EstimateNodesActions(nodes_to_expand);
+
+        for (int node : nodes_to_expand) {
+
+            if (!nodes[node].is_terminal) {
+                for (auto& kid : nodes[node].kids) {
+                    if (kid.kid_node < 0) {
+                        tree.Move(node, kid.move);
+                        kid.kid_node = AppendLastTreeNode();
+                    }
+                    beam.insert({{kid.q_nn_score, kid.kid_node}, kid.kid_node});
+                }
+            }
+
+            int runnode = node;
+            while (true) {
+                assert(runnode >= 0);
+
+                float best_kid_score = -1000;
+                for (auto& kid_info : nodes[runnode].kids)
+                    if (kid_info.kid_node >= 0) {
+                        kid_info.q_tree_score = -nodes[kid_info.kid_node].v_tree_score;
+                        best_kid_score = max(best_kid_score, kid_info.q_tree_score);
+                    }
+                    else {
+                        best_kid_score = max(best_kid_score, kid_info.q_nn_score);
+                    }
+
+                if (abs(nodes[runnode].v_tree_score - best_kid_score) < 1e-6)
+                    break;
+                nodes[runnode].v_tree_score = best_kid_score;
+
+                if (runnode == top_node)
+                    break;
+                runnode = tree.parents[runnode];
+            }
+        }
+    }
+
+    float best_score = -10000000;
+    lczero::Move best_move;
+
+    for (auto& kid_info : nodes[top_node].kids)
+        if (kid_info.q_tree_score >= best_score) {
+            best_score = kid_info.q_tree_score;
+            best_move = kid_info.move;
+        }
+    assert(best_score > -10000000);
+
+    // int ki = rand() % nodes[top_node].kids.size();
+    // auto best_move = nodes[top_node].kids[ki].move;
 
     auto& top_position = tree.positions[top_node];
-    move = top_position.GetBoard().GetLegacyMove(move);
+    best_move = top_position.GetBoard().GetLegacyMove(best_move);
     if (top_position.IsBlackToMove())
-        move.Mirror();
+        best_move.Mirror();
 
-    cout << "bestmove " << move.as_string() << "\n";
+    cout << "bestmove " << best_move.as_string() << "\n";
     cout << flush;
 
     is_in_search = false;

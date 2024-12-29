@@ -6,12 +6,17 @@
 #include <string>
 #include <optional>
 #include <chrono>
+#include <ATen/Device.h>
 
 #include "infra/config_parser.h"
 #include "chess/game_tree.h"
 #include "chess/board.h"
 #include "chess/bitboard.h"
 #include "neural/encoder.h"
+#include "neural/network.h"
+#include "neural/torch_encoder.h"
+#include "training/model_keeper.h"
+#include "training/training_helpers.h"
 
 namespace probs {
 
@@ -27,8 +32,6 @@ struct KidInfo {
 struct NodeInfo {
     bool is_terminal;
     std::vector<KidInfo> kids;
-    int transform;
-    lczero::InputPlanes input_planes;
     float v_tree_score;
 };
 
@@ -59,16 +62,23 @@ class UciPlayer {
     private:
         int AppendLastTreeNode();
         int FindKidIndex(const int node, const lczero::Move move) const;
-        int n_max_episode_steps;
-        PositionHistoryTree tree;
+        void EstimateNodesActions(const std::vector<int>& nodes);
+
         bool debug_on;
         std::atomic<bool> is_in_search;
         std::atomic<bool> stop_search_flag;
         std::future<void> search_future;
+
+        int n_max_episode_steps;
+        PositionHistoryTree tree;
         std::string last_pos_fen;
         std::vector<std::string> last_pos_moves;
         int top_node;
         std::vector<NodeInfo> nodes;
+
+        ResNet q_model;
+        at::Device device;
+        int q_agent_batch_size;
 };
 
 }  // namespace probs

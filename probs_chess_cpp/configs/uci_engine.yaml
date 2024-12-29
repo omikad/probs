@@ -13,4 +13,5 @@ env:
   n_max_episode_steps: 500
 infra:
   gpu: 0                               # gpu id, use -1 for cpu
-  # n_threads: 5
+  q_agent_batch_size: 16
+  uci_mode: 1                          # indicate program to work as UCI engine
