@@ -34,6 +34,7 @@ int UciPlayer::AppendLastTreeNode() {
 UciPlayer::UciPlayer(ConfigParser& config)
         : n_max_episode_steps(config.GetInt("env.n_max_episode_steps", true, 0))
         , q_agent_batch_size(config.GetInt("infra.q_agent_batch_size", true, 0))
+        , search_mode(config.GetInt("infra.search_mode", false, 2))
         , tree(lczero::ChessBoard::kStartposFen, n_max_episode_steps)
         , is_in_search(false)
         , stop_search_flag(false)
@@ -193,6 +194,107 @@ void UciPlayer::EstimateNodesActions(const vector<int>& nodes_to_estimate) {
 }
 
 
+lczero::Move UciPlayer::GoSearch__Random() {
+    int ki = rand() % nodes[top_node].kids.size();
+    auto best_move = nodes[top_node].kids[ki].move;
+    return best_move;
+}
+
+
+lczero::Move UciPlayer::GoSearch__SingleQCall() {
+    EstimateNodesActions({top_node});
+    int best_ki = 0;
+    for (int ki = 0; ki < (int)nodes[top_node].kids.size(); ki++)
+        if (nodes[top_node].kids[ki].q_nn_score > nodes[top_node].kids[best_ki].q_nn_score)
+            best_ki = ki;
+    auto best_move = nodes[top_node].kids[best_ki].move;
+    return best_move;
+}
+
+
+lczero::Move UciPlayer::GoSearch__FullSearch() {
+    map<pair<float, int>, pair<int, int>> beam; // {(priority, counter) -> (node, kid index)}
+    int beam_counter = 0;
+    beam.insert({{1000.0, beam_counter++}, {top_node, -1}});
+
+// cerr << "[EXPAND] push top_node=" << top_node << endl;
+
+    for (int step_i = 0 ; step_i < 10; step_i++) {
+
+        vector<int> nodes_to_expand;
+        while (nodes_to_expand.size() < q_agent_batch_size && beam.size() > 0) {
+            auto [node, ki] = beam.rbegin()->second;
+            beam.erase(prev(beam.end()));
+
+// cerr << "[EXPAND] top_node=" << top_node << "; pop node=" << node << "; pop ki=" << ki << endl;
+
+            if (ki < 0) {
+                nodes_to_expand.push_back(node);
+            }
+            else {
+                auto& kid = nodes[node].kids[ki];
+                if (kid.kid_node < 0) {
+                    tree.Move(node, kid.move);
+                    kid.kid_node = AppendLastTreeNode();
+                }
+                nodes_to_expand.push_back(kid.kid_node);
+            }
+        }
+        if (nodes_to_expand.size() == 0) break;
+
+        EstimateNodesActions(nodes_to_expand);
+
+        for (int node : nodes_to_expand) {
+
+            if (!nodes[node].is_terminal) {
+                for (int ki = 0; ki < (int)nodes[node].kids.size(); ki++) {
+                    auto& kid = nodes[node].kids[ki];
+                    beam.insert({{kid.q_nn_score, beam_counter++}, {node, ki}});
+                }
+            }
+
+            int runnode = node;
+            while (true) {
+                assert(runnode >= 0);
+
+                float best_kid_score = -1000;
+                for (auto& kid_info : nodes[runnode].kids)
+                    if (kid_info.kid_node >= 0) {
+                        kid_info.q_tree_score = -nodes[kid_info.kid_node].v_tree_score;
+                        best_kid_score = max(best_kid_score, kid_info.q_tree_score);
+                    }
+                    else {
+                        kid_info.q_tree_score = kid_info.q_nn_score;
+                        best_kid_score = max(best_kid_score, kid_info.q_nn_score);
+                    }
+
+// cerr << "[EXPAND] bubble up result node=" << node << "; runnode=" << runnode << "; best_kid_score=" << best_kid_score << endl;
+
+                if (abs(nodes[runnode].v_tree_score - best_kid_score) < 1e-6)
+                    break;
+                nodes[runnode].v_tree_score = best_kid_score;
+
+                if (runnode == top_node)
+                    break;
+                runnode = tree.parents[runnode];
+            }
+        }
+    }
+
+    float best_score = -10000000;
+    lczero::Move best_move;
+
+    for (auto& kid_info : nodes[top_node].kids)
+        if (kid_info.q_tree_score >= best_score) {
+            best_score = kid_info.q_tree_score;
+            best_move = kid_info.move;
+        }
+    assert(best_score > -10000000);
+
+    return best_move;
+}
+
+
 void UciPlayer::StartSearch(
         optional<chrono::milliseconds> search_wtime,
         optional<chrono::milliseconds> search_btime,
@@ -226,70 +328,10 @@ void UciPlayer::StartSearch(
 
     assert(!nodes[top_node].is_terminal);
 
-    map<pair<float, int>, int> beam; // {(priority, node) -> node}
-    beam.insert({{1000.0, top_node}, top_node});
-
-    for (int step_i = 0 ; step_i < 10; step_i++) {
-
-        vector<int> nodes_to_expand;
-        while (nodes_to_expand.size() < q_agent_batch_size && beam.size() > 0) {
-            int node = beam.rbegin()->second;
-            nodes_to_expand.push_back(node);
-            beam.erase(prev(beam.end()));
-        }
-        if (nodes_to_expand.size() == 0) break;
-
-        EstimateNodesActions(nodes_to_expand);
-
-        for (int node : nodes_to_expand) {
-
-            if (!nodes[node].is_terminal) {
-                for (auto& kid : nodes[node].kids) {
-                    if (kid.kid_node < 0) {
-                        tree.Move(node, kid.move);
-                        kid.kid_node = AppendLastTreeNode();
-                    }
-                    beam.insert({{kid.q_nn_score, kid.kid_node}, kid.kid_node});
-                }
-            }
-
-            int runnode = node;
-            while (true) {
-                assert(runnode >= 0);
-
-                float best_kid_score = -1000;
-                for (auto& kid_info : nodes[runnode].kids)
-                    if (kid_info.kid_node >= 0) {
-                        kid_info.q_tree_score = -nodes[kid_info.kid_node].v_tree_score;
-                        best_kid_score = max(best_kid_score, kid_info.q_tree_score);
-                    }
-                    else {
-                        best_kid_score = max(best_kid_score, kid_info.q_nn_score);
-                    }
-
-                if (abs(nodes[runnode].v_tree_score - best_kid_score) < 1e-6)
-                    break;
-                nodes[runnode].v_tree_score = best_kid_score;
-
-                if (runnode == top_node)
-                    break;
-                runnode = tree.parents[runnode];
-            }
-        }
-    }
-
-    float best_score = -10000000;
-    lczero::Move best_move;
-
-    for (auto& kid_info : nodes[top_node].kids)
-        if (kid_info.q_tree_score >= best_score) {
-            best_score = kid_info.q_tree_score;
-            best_move = kid_info.move;
-        }
-    assert(best_score > -10000000);
-
-    // int ki = rand() % nodes[top_node].kids.size();
-    // auto best_move = nodes[top_node].kids[ki].move;
+    auto best_move =
+        search_mode == 2 ? GoSearch__FullSearch()
+        : search_mode == 1 ? GoSearch__SingleQCall()
+        : GoSearch__Random();
 
     auto& top_position = tree.positions[top_node];
     best_move = top_position.GetBoard().GetLegacyMove(best_move);

@@ -15,3 +15,4 @@ infra:
   gpu: 0                               # gpu id, use -1 for cpu
   q_agent_batch_size: 16
   uci_mode: 1                          # indicate program to work as UCI engine
+  search_mode: 2                       # 0 - random; 1 - single call to Q model; 2 - full search

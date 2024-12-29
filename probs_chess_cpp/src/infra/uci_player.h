@@ -64,6 +64,11 @@ class UciPlayer {
         int FindKidIndex(const int node, const lczero::Move move) const;
         void EstimateNodesActions(const std::vector<int>& nodes);
 
+        lczero::Move GoSearch__Random();
+        lczero::Move GoSearch__SingleQCall();
+        lczero::Move GoSearch__FullSearch();
+        int search_mode;
+
         bool debug_on;
         std::atomic<bool> is_in_search;
         std::atomic<bool> stop_search_flag;

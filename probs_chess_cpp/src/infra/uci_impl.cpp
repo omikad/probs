@@ -15,6 +15,8 @@ UciImpl::UciImpl(ConfigParser& config) : uci_player(config) {
 
 
 void UciImpl::Run() {
+    torch::NoGradGuard no_grad;
+
     while (true) {
         string input_line;
         getline(cin, input_line);
