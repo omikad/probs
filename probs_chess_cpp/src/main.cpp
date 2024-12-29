@@ -30,6 +30,20 @@ string getUciEngineConfig() {
 }
 
 
+void GoUci(ConfigParser& config) {
+    for (int cmdi = 0; cmdi < 10; cmdi++) {
+        string command;
+        cin >> command;
+
+        if (command == "uci") {
+            probs::UciImpl uci(config);
+            uci.Run();
+            break;
+        }
+    }
+}
+
+
 int main(int argc, char* argv[]) {
     std::locale::global(std::locale("en_US.UTF-8"));
     srand(time(NULL));
@@ -37,22 +51,13 @@ int main(int argc, char* argv[]) {
 
     try {
         if (argc == 1) {
-            ConfigParser config(getUciEngineConfig());
-
-            for (int cmdi = 0; cmdi < 10; cmdi++) {
-                string command;
-                cin >> command;
-
-                if (command == "uci") {
-                    probs::UciImpl uci(config);
-                    uci.Run();
-                    break;
-                }
-            }
+            string config_file_path = getUciEngineConfig();
+            ConfigParser config(config_file_path);
+            GoUci(config);
         }
         else if (argc != 3) {
             cerr << "Run as UCI Engine: " << argv[0] << "\n";
-            cerr << "Using with command: " << argv[0] << "<cmd> <path_to_yaml_file>\n";
+            cerr << "Using with command: " << argv[0] << " <cmd> <path_to_yaml_file>\n";
             return 1;
         }
         else {
@@ -73,6 +78,9 @@ int main(int argc, char* argv[]) {
             else if (command == "train") {
                 probs::ProbsImpl probs(config);
                 probs.GoTrain();
+            }
+            else if (command == "uci") {
+                GoUci(config);
             }
             else if (command == "test_V_predict_self_play") {
                 probs::V_predict_self_play(config);

@@ -155,11 +155,6 @@ void UciPlayer::EstimateNodesActions(const vector<int>& nodes_to_estimate) {
                 runnode = tree.parents[runnode];
                 j--;
             }
-
-            // TODO: remove
-            vector<int> expected = tree.GetHistoryPathNodes(node);
-            assert(expected.size() == history_nodes.size());
-            for (int ii = 0; ii < expected.size(); ii++) assert(expected[ii] == history_nodes[ii]);
         }
 
         planes[bi] = Encode(tree, history_nodes, &transform_out[bi]);
