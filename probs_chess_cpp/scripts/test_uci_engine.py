@@ -132,7 +132,7 @@ def play_model_vs_model():
     GAMES, STEPS, VERBOSE = 100, 500, False
     RANDOMIZE_PLIES = 2
     SEARCH_STRINGS = [
-        "go wtime 2000 btime 2000 movestogo 10",
+        "go wtime 3000 btime 3000 movestogo 10",
         "go wtime 500 btime 500 movestogo 10",
     ]
     proc1 = UciChess(config=None, verbose=VERBOSE)

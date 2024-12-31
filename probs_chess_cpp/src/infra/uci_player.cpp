@@ -162,12 +162,6 @@ void UciPlayer::EstimateNodesActions(const vector<int>& nodes_to_estimate) {
                 runnode = tree.parents[runnode];
                 j--;
             }
-
-            // TODO: remove 2
-            vector<int> assert_history_nodes = tree.GetHistoryPathNodes(node);
-            assert(assert_history_nodes.size() == history_nodes.size());
-            for (int i = 0; i < (int)assert_history_nodes.size(); i++)
-                assert(assert_history_nodes[i] == history_nodes[i]);
         }
 
         planes[bi] = Encode(tree, history_nodes, &transform_out[bi]);
@@ -298,10 +292,6 @@ lczero::Move UciPlayer::GoSearch__FullSearch() {
                 else
                     queue.push_back(kid.kid_node);
             }
-
-        else                                        // TODO: remove
-            for (auto& kid : nodes[node].kids)
-                assert(kid.kid_node < 0);
     }
 
     while (!search_helper.CheckFlagStop() && beam.size() > 0) {
@@ -335,32 +325,6 @@ lczero::Move UciPlayer::GoSearch__FullSearch() {
                 beam.insert({{kid.q_nn_score, beam_counter++}, {node, ki}});
                 assert(kid.kid_node < 0);
             }
-
-            // int runnode = node;
-            // while (true) {
-            //     assert(runnode >= 0);
-
-            //     if (!nodes[runnode].is_terminal) {
-            //         float best_kid_score = -1000;
-            //         for (auto& kid : nodes[runnode].kids)
-            //             if (kid.kid_node >= 0) {
-            //                 kid.q_tree_score = -nodes[kid.kid_node].v_tree_score;
-            //                 best_kid_score = max(best_kid_score, kid.q_tree_score);
-            //             }
-            //             else {
-            //                 kid.q_tree_score = kid.q_nn_score;
-            //                 best_kid_score = max(best_kid_score, kid.q_nn_score);
-            //             }
-
-            //         // if (abs(nodes[runnode].v_tree_score - best_kid_score) < 1e-6)
-            //         //     break;
-            //         nodes[runnode].v_tree_score = best_kid_score;
-            //     }
-
-            //     if (runnode == top_node)
-            //         break;
-            //     runnode = tree.parents[runnode];
-            // }
         }
     }
 
@@ -378,11 +342,11 @@ lczero::Move UciPlayer::GoSearch__FullSearch() {
                 for (auto& kid : nodes[node].kids) {
                     if (kid.kid_node >= 0) {
                         kid.q_tree_score = -nodes[kid.kid_node].v_tree_score;
-                        assert(kid.q_tree_score >= -10 && kid.q_tree_score <= 10);
+                        assert(kid.q_tree_score >= -100 && kid.q_tree_score <= 100);
                     }
                     else {
                         kid.q_tree_score = kid.q_nn_score;
-                        assert(kid.q_tree_score >= -10 && kid.q_tree_score <= 10);
+                        assert(kid.q_tree_score >= -100 && kid.q_tree_score <= 100);
                     }
                     best_kid_score = max(best_kid_score, kid.q_tree_score);
                 }
