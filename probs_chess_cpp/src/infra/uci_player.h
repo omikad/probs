@@ -31,8 +31,24 @@ struct KidInfo {
 
 struct NodeInfo {
     bool is_terminal;
+    bool q_model_called;
     std::vector<KidInfo> kids;
     float v_tree_score;
+};
+
+
+struct SearchConstraintsInfo {
+    std::optional<std::chrono::milliseconds> wtime;
+    std::optional<std::chrono::milliseconds> btime;
+    std::optional<std::chrono::milliseconds> winc;
+    std::optional<std::chrono::milliseconds> binc;
+    std::optional<int> moves_to_go;
+    std::optional<int> depth;
+    std::optional<uint64_t> nodes;
+    std::optional<int> mate;
+    std::optional<std::chrono::milliseconds> fixed_time;
+    bool infinite;
+    std::vector<std::string> moves;
 };
 
 
@@ -44,20 +60,7 @@ class UciPlayer {
         void SetPosition(const std::string& starting_fen, const std::vector<std::string>& moves);
         void WaitForReadyState();
         void Stop();
-
-        void StartSearch(
-            std::optional<std::chrono::milliseconds> search_wtime,
-            std::optional<std::chrono::milliseconds> search_btime,
-            std::optional<std::chrono::milliseconds> search_winc,
-            std::optional<std::chrono::milliseconds> search_binc,
-            std::optional<int> search_moves_to_go,
-            std::optional<int> search_depth,
-            std::optional<uint64_t> search_nodes,
-            std::optional<int> search_mate,
-            std::optional<std::chrono::milliseconds> search_fixed_time,
-            bool search_infinite,
-            std::vector<std::string>& search_moves
-        );
+        void StartSearch(SearchConstraintsInfo& search_info);
 
     private:
         int AppendLastTreeNode();
@@ -68,6 +71,7 @@ class UciPlayer {
         lczero::Move GoSearch__SingleQCall();
         lczero::Move GoSearch__FullSearch();
         int search_mode;
+        SearchConstraintsInfo search_info;
 
         bool debug_on;
         std::atomic<bool> is_in_search;

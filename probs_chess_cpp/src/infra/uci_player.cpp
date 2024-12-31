@@ -8,6 +8,7 @@ namespace probs {
 int UciPlayer::AppendLastTreeNode() {
     int tree_node_idx = (int)tree.positions.size() - 1;
     NodeInfo node;
+    node.q_model_called = false;
     for (auto move : tree.node_valid_moves[tree_node_idx]) {
         KidInfo kid_info;
         kid_info.kid_node = -1;
@@ -19,7 +20,7 @@ int UciPlayer::AppendLastTreeNode() {
     if (node.kids.size() == 0) {
         node.is_terminal = true;
         auto score = tree.GetRelativePositionScore(tree_node_idx);
-        node.v_tree_score = score.has_value() ? 0 : score.value();
+        node.v_tree_score = score.has_value() ? score.value() : 0;
     }
     else {
         node.is_terminal = false;
@@ -49,6 +50,11 @@ UciPlayer::UciPlayer(ConfigParser& config)
     q_model = model_keeper.q_model;
 
     top_node = AppendLastTreeNode();
+
+    for (int warmup = 0; warmup < 5; warmup++) {
+        EstimateNodesActions({top_node});
+        nodes[top_node].q_model_called = false;
+    }
 }
 
 
@@ -80,6 +86,8 @@ void UciPlayer::SetPosition(const string& starting_fen, const vector<string>& mo
         if (eq)
             continuation = true;
     }
+
+    continuation = false;           // TODO : use continuation
 
     if (!continuation) {
         last_pos_fen = starting_fen;
@@ -138,6 +146,7 @@ void UciPlayer::EstimateNodesActions(const vector<int>& nodes_to_estimate) {
     vector<int> history_nodes;
     for (int bi = 0; bi < batch_size; bi++) {
         int node = nodes_to_estimate[bi];
+        assert(nodes[node].q_model_called == false);
         if (bi == 0)
             history_nodes = tree.GetHistoryPathNodes(node);
         else {
@@ -155,6 +164,12 @@ void UciPlayer::EstimateNodesActions(const vector<int>& nodes_to_estimate) {
                 runnode = tree.parents[runnode];
                 j--;
             }
+
+            // TODO: remove 2
+            vector<int> assert_history_nodes = tree.GetHistoryPathNodes(node);
+            assert(assert_history_nodes.size() == history_nodes.size());
+            for (int i = 0; i < (int)assert_history_nodes.size(); i++)
+                assert(assert_history_nodes[i] == history_nodes[i]);
         }
 
         planes[bi] = Encode(tree, history_nodes, &transform_out[bi]);
@@ -173,6 +188,9 @@ void UciPlayer::EstimateNodesActions(const vector<int>& nodes_to_estimate) {
 
     for (int bi = 0; bi < batch_size; bi++) {
         int node = nodes_to_estimate[bi];
+
+        float best_kid_score = -1000.0;
+
         for (auto& kid_info : nodes[node].kids) {
             auto move = kid_info.move;
             int move_idx = move.as_nn_index(transform_out[bi]);
@@ -184,7 +202,12 @@ void UciPlayer::EstimateNodesActions(const vector<int>& nodes_to_estimate) {
             float score = q_values_accessor[bi][displacement][row][col];
 
             kid_info.q_nn_score = score;
+            kid_info.q_tree_score = score;
+            best_kid_score = max(best_kid_score, score);
         }
+
+        nodes[node].q_model_called = true;
+        nodes[node].v_tree_score = best_kid_score;
     }
 }
 
@@ -207,78 +230,177 @@ lczero::Move UciPlayer::GoSearch__SingleQCall() {
 }
 
 
+const long long LIMIT_TIME_GAP = 20;
+struct SearchHelper {
+
+    SearchConstraintsInfo search_info;
+    chrono::high_resolution_clock::time_point start_time;
+    optional<long long> limit_time;
+    long long calls;
+
+    SearchHelper(SearchConstraintsInfo& search_info, bool is_black)
+            : search_info(search_info)
+            , start_time(chrono::high_resolution_clock::now())
+            , limit_time(nullopt)
+            , calls(0) {
+        if (search_info.fixed_time.has_value())
+            limit_time = search_info.fixed_time.value().count();
+        else if (!is_black && search_info.wtime.has_value()) {
+            int denum = search_info.moves_to_go.has_value() ? search_info.moves_to_go.value() : 100;
+            limit_time = search_info.wtime.value().count() / denum;
+        }
+        else if (is_black && search_info.btime.has_value()) {
+            int denum = search_info.moves_to_go.has_value() ? search_info.moves_to_go.value() : 100;
+            limit_time = search_info.btime.value().count() / denum;
+        }
+    }
+
+    bool CheckFlagStop() {
+        calls++;
+        if (limit_time.has_value()) {
+            auto elapsed = GetElapsedTime();
+            if (elapsed >= limit_time.value() - LIMIT_TIME_GAP)
+                return true;
+        }
+        return false;
+    }
+
+    int64_t GetElapsedTime() {
+        const auto time_now = std::chrono::high_resolution_clock::now();
+        auto elapsed = chrono::duration_cast<chrono::milliseconds>(time_now - start_time).count();
+        return elapsed;
+    }
+
+    void PrintSearchStuff() {
+        long long elapsed = GetElapsedTime();
+        cerr << "Elapsed: " << elapsed << "ms; calls=" << calls << "; ms per call=" << elapsed / calls << endl;
+    }
+};
+
+
 lczero::Move UciPlayer::GoSearch__FullSearch() {
+    SearchHelper search_helper(search_info, tree.positions[top_node].IsBlackToMove());
+
     map<pair<float, int>, pair<int, int>> beam; // {(priority, counter) -> (node, kid index)}
     int beam_counter = 0;
+
+    // vector<int> queue({top_node});
+    // for (int qi = 0; qi < (int)queue.size(); qi++) {
+    //     int node = queue[qi];
+
+    //     if (node == top_node && nodes[node].q_model_called == false) {
+    //         beam.insert({{1000.0, beam_counter++}, {top_node, -1}});
+    //     }
+
+    //     if (nodes[node].q_model_called)
+    //         for (int ki = 0; ki < (int)nodes[node].kids.size(); ki++) {
+    //             auto& kid = nodes[node].kids[ki];
+    //             if (kid.kid_node < 0)
+    //                 beam.insert({{kid.q_nn_score, beam_counter++}, {node, ki}});
+    //             else
+    //                 queue.push_back(kid.kid_node);
+    //         }
+
+    //     else                                        // TODO: remove
+    //         for (auto& kid : nodes[node].kids)
+    //             assert(kid.kid_node < 0);
+    // }
     beam.insert({{1000.0, beam_counter++}, {top_node, -1}});
 
-// cerr << "[EXPAND] push top_node=" << top_node << endl;
-
-    for (int step_i = 0 ; step_i < 10; step_i++) {
+    while (!search_helper.CheckFlagStop() && beam.size() > 0) {
 
         vector<int> nodes_to_expand;
         while (nodes_to_expand.size() < q_agent_batch_size && beam.size() > 0) {
             auto [node, ki] = beam.rbegin()->second;
-            beam.erase(prev(beam.end()));
-
-// cerr << "[EXPAND] top_node=" << top_node << "; pop node=" << node << "; pop ki=" << ki << endl;
+            beam.erase(prev(end(beam)));
 
             if (ki < 0) {
                 nodes_to_expand.push_back(node);
             }
             else {
                 auto& kid = nodes[node].kids[ki];
-                if (kid.kid_node < 0) {
-                    tree.Move(node, kid.move);
-                    kid.kid_node = AppendLastTreeNode();
-                }
-                nodes_to_expand.push_back(kid.kid_node);
+                assert(kid.kid_node < 0);
+                tree.Move(node, kid.move);
+                kid.kid_node = AppendLastTreeNode();
+                if (!nodes[kid.kid_node].is_terminal)
+                    nodes_to_expand.push_back(kid.kid_node);
             }
         }
-        if (nodes_to_expand.size() == 0) break;
+        if (nodes_to_expand.size() == 0) continue;
 
         EstimateNodesActions(nodes_to_expand);
 
         for (int node : nodes_to_expand) {
+            assert(!nodes[node].is_terminal);
 
-            if (!nodes[node].is_terminal) {
-                for (int ki = 0; ki < (int)nodes[node].kids.size(); ki++) {
-                    auto& kid = nodes[node].kids[ki];
-                    beam.insert({{kid.q_nn_score, beam_counter++}, {node, ki}});
-                }
+            for (int ki = 0; ki < (int)nodes[node].kids.size(); ki++) {
+                auto& kid = nodes[node].kids[ki];
+                beam.insert({{kid.q_nn_score, beam_counter++}, {node, ki}});
+                assert(kid.kid_node < 0);
             }
 
-            int runnode = node;
-            while (true) {
-                assert(runnode >= 0);
+            // int runnode = node;
+            // while (true) {
+            //     assert(runnode >= 0);
 
-                float best_kid_score = -1000;
-                for (auto& kid_info : nodes[runnode].kids)
-                    if (kid_info.kid_node >= 0) {
-                        kid_info.q_tree_score = -nodes[kid_info.kid_node].v_tree_score;
-                        best_kid_score = max(best_kid_score, kid_info.q_tree_score);
-                    }
-                    else {
-                        kid_info.q_tree_score = kid_info.q_nn_score;
-                        best_kid_score = max(best_kid_score, kid_info.q_nn_score);
-                    }
+            //     if (!nodes[runnode].is_terminal) {
+            //         float best_kid_score = -1000;
+            //         for (auto& kid : nodes[runnode].kids)
+            //             if (kid.kid_node >= 0) {
+            //                 kid.q_tree_score = -nodes[kid.kid_node].v_tree_score;
+            //                 best_kid_score = max(best_kid_score, kid.q_tree_score);
+            //             }
+            //             else {
+            //                 kid.q_tree_score = kid.q_nn_score;
+            //                 best_kid_score = max(best_kid_score, kid.q_nn_score);
+            //             }
 
-// cerr << "[EXPAND] bubble up result node=" << node << "; runnode=" << runnode << "; best_kid_score=" << best_kid_score << endl;
+            //         // if (abs(nodes[runnode].v_tree_score - best_kid_score) < 1e-6)
+            //         //     break;
+            //         nodes[runnode].v_tree_score = best_kid_score;
+            //     }
 
-                if (abs(nodes[runnode].v_tree_score - best_kid_score) < 1e-6)
-                    break;
-                nodes[runnode].v_tree_score = best_kid_score;
-
-                if (runnode == top_node)
-                    break;
-                runnode = tree.parents[runnode];
-            }
+            //     if (runnode == top_node)
+            //         break;
+            //     runnode = tree.parents[runnode];
+            // }
         }
     }
+
+    {
+        vector<int> queue({top_node});
+        for (int qi = 0; qi < (int)queue.size(); qi++)
+            for (auto& kid : nodes[queue[qi]].kids)
+                if (kid.kid_node >= 0)
+                    queue.push_back(kid.kid_node);
+
+        for (int qi = (int)queue.size() - 1; qi >= 0; qi--) {
+            int node = queue[qi];
+            if (!nodes[node].is_terminal) {
+                float best_kid_score = -1000;
+                for (auto& kid : nodes[node].kids) {
+                    if (kid.kid_node >= 0) {
+                        kid.q_tree_score = -nodes[kid.kid_node].v_tree_score;
+                        assert(kid.q_tree_score >= -10 && kid.q_tree_score <= 10);
+                    }
+                    else {
+                        kid.q_tree_score = kid.q_nn_score;
+                        assert(kid.q_tree_score >= -10 && kid.q_tree_score <= 10);
+                    }
+                    best_kid_score = max(best_kid_score, kid.q_tree_score);
+                }
+                nodes[node].v_tree_score = best_kid_score;
+            }
+        }
+cerr << "queue.size()=" << queue.size() << endl;
+    }
+
+    search_helper.PrintSearchStuff();
 
     float best_score = -10000000;
     lczero::Move best_move;
 
+    assert(nodes[top_node].q_model_called);
     for (auto& kid_info : nodes[top_node].kids)
         if (kid_info.q_tree_score >= best_score) {
             best_score = kid_info.q_tree_score;
@@ -290,53 +412,46 @@ lczero::Move UciPlayer::GoSearch__FullSearch() {
 }
 
 
-void UciPlayer::StartSearch(
-        optional<chrono::milliseconds> search_wtime,
-        optional<chrono::milliseconds> search_btime,
-        optional<chrono::milliseconds> search_winc,
-        optional<chrono::milliseconds> search_binc,
-        optional<int> search_moves_to_go,
-        optional<int> search_depth,
-        optional<uint64_t> search_nodes,
-        optional<int> search_mate,
-        optional<chrono::milliseconds> search_fixed_time,
-        bool search_infinite,
-        vector<string>& search_moves
-    ) {
+void UciPlayer::StartSearch(SearchConstraintsInfo& _search_info) {
+    assert(is_in_search == false);
     is_in_search = true;
     stop_search_flag = false;
 
+    search_info = _search_info;
+
     if (debug_on) {
         cerr << "Start search with params:" << endl;
-        cerr << "search_wtime=" << (search_wtime.has_value() ? to_string(search_wtime.value().count()) : "null") << endl;
-        cerr << "search_btime=" << (search_btime.has_value() ? to_string(search_btime.value().count()) : "null") << endl;
-        cerr << "search_winc=" << (search_winc.has_value() ? to_string(search_winc.value().count()) : "null") << endl;
-        cerr << "search_binc=" << (search_binc.has_value() ? to_string(search_binc.value().count()) : "null") << endl;
-        cerr << "search_moves_to_go=" << (search_moves_to_go.has_value() ? to_string(search_moves_to_go.value()) : "null") << endl;
-        cerr << "search_depth=" << (search_depth.has_value() ? to_string(search_depth.value()) : "null") << endl;
-        cerr << "search_nodes=" << (search_nodes.has_value() ? to_string(search_nodes.value()) : "null") << endl;
-        cerr << "search_mate=" << (search_mate.has_value() ? to_string(search_mate.value()) : "null") << endl;
-        cerr << "search_fixed_time=" << (search_fixed_time.has_value() ? to_string(search_fixed_time.value().count()) : "null") << endl;
-        cerr << "search_infinite=" << (search_infinite ? "true" : "false") << endl;
-        cerr << "search_moves=["; for (auto& move : search_moves) cerr << " " << move; cerr << " ]" << endl;
+        cerr << "search_info.wtime=" << (search_info.wtime.has_value() ? to_string(search_info.wtime.value().count()) : "null") << endl;
+        cerr << "search_info.btime=" << (search_info.btime.has_value() ? to_string(search_info.btime.value().count()) : "null") << endl;
+        cerr << "search_info.winc=" << (search_info.winc.has_value() ? to_string(search_info.winc.value().count()) : "null") << endl;
+        cerr << "search_info.binc=" << (search_info.binc.has_value() ? to_string(search_info.binc.value().count()) : "null") << endl;
+        cerr << "search_info.moves_to_go=" << (search_info.moves_to_go.has_value() ? to_string(search_info.moves_to_go.value()) : "null") << endl;
+        cerr << "search_info.depth=" << (search_info.depth.has_value() ? to_string(search_info.depth.value()) : "null") << endl;
+        cerr << "search_info.nodes=" << (search_info.nodes.has_value() ? to_string(search_info.nodes.value()) : "null") << endl;
+        cerr << "search_info.mate=" << (search_info.mate.has_value() ? to_string(search_info.mate.value()) : "null") << endl;
+        cerr << "search_info.fixed_time=" << (search_info.fixed_time.has_value() ? to_string(search_info.fixed_time.value().count()) : "null") << endl;
+        cerr << "search_info.infinite=" << (search_info.infinite ? "true" : "false") << endl;
+        cerr << "search_info.moves=["; for (auto& move : search_info.moves) cerr << " " << move; cerr << " ]" << endl;
     }
 
     assert(!nodes[top_node].is_terminal);
 
-    auto best_move =
-        search_mode == 2 ? GoSearch__FullSearch()
-        : search_mode == 1 ? GoSearch__SingleQCall()
-        : GoSearch__Random();
+    search_future = std::async(std::launch::async, [&] {
+        auto best_move =
+            search_mode == 2 ? GoSearch__FullSearch()
+            : search_mode == 1 ? GoSearch__SingleQCall()
+            : GoSearch__Random();
 
-    auto& top_position = tree.positions[top_node];
-    best_move = top_position.GetBoard().GetLegacyMove(best_move);
-    if (top_position.IsBlackToMove())
-        best_move.Mirror();
+        auto& top_position = tree.positions[top_node];
+        best_move = top_position.GetBoard().GetLegacyMove(best_move);
+        if (top_position.IsBlackToMove())
+            best_move.Mirror();
 
-    cout << "bestmove " << best_move.as_string() << "\n";
-    cout << flush;
+        is_in_search = false;
 
-    is_in_search = false;
+        cout << "bestmove " << best_move.as_string() << "\n";
+        cout << flush;
+    });
 }
 
 

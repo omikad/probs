@@ -63,6 +63,11 @@ class Outcomes:
     def print(self):
         print(f"First player as white: wins,draws,loses={self.outcomes[0]}")
         print(f"First player as black: wins,draws,loses={self.outcomes[1]}")
+        wins = self.outcomes[0][0] + self.outcomes[1][0]
+        draws = self.outcomes[0][1] + self.outcomes[1][1]
+        total_games = sum(sum(row) for row in self.outcomes)
+        score = (wins + draws / 2) / total_games
+        print(f"First player score = {score}")
 
 
 def play_vs_random():
@@ -127,10 +132,11 @@ def play_model_vs_model():
     GAMES, STEPS, VERBOSE = 100, 500, False
     RANDOMIZE_PLIES = 2
     SEARCH_STRINGS = [
-        "go wtime 100 btime 100 movestogo 10",
-        "go wtime 100 btime 100 movestogo 10",
+        "go wtime 2000 btime 2000 movestogo 10",
+        "go wtime 500 btime 500 movestogo 10",
     ]
     proc1 = UciChess(config=None, verbose=VERBOSE)
+    # proc2 = UciChess(config=None, verbose=VERBOSE)
     proc2 = UciChess(config='../configs/uci_engine_copy.yaml', verbose=VERBOSE)
 
     try:

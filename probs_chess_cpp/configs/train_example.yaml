@@ -27,7 +27,7 @@ training:
   checkpoints_dir: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints'
 
   # resume from checkpoint:
-  # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/picked_checkpoints/ckpt_20241213-021452*'
+  checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241231-111234*'
 
   is_test: 0    # apply various checks on each iteration
 infra:

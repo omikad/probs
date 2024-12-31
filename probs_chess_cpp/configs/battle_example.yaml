@@ -14,7 +14,7 @@ player1:
       type: resnet
       res_blocks: 11
       filters: 96
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241228-123713*'
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241231-111234*'
 
 player2:
   # kind: "random"
@@ -33,9 +33,9 @@ player2:
     # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241219-103526*'
     # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241222-173728*'
     # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241224-104436*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241225-104038*'
     # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241228-123713*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241229-131916*'
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241230-000153*'
+    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241231-111234*'
 
   # kind: "q_resnet_player"
   # model:
@@ -55,4 +55,4 @@ env:
   n_max_episode_steps: 500
 infra:
   gpu: 0                               # gpu id, use -1 for cpu
-  evaluate_n_games: 1000
+  evaluate_n_games: 10000

@@ -96,18 +96,20 @@ void UciImpl::OnPositionCommand(stringstream& line_stream) {
 
 
 void UciImpl::OnGoCommand(stringstream& line_stream) {
-    vector<string> search_moves;
+    SearchConstraintsInfo search_info;
+    search_info.wtime = nullopt;
+    search_info.btime = nullopt;
+    search_info.winc = nullopt;
+    search_info.binc = nullopt;
+    search_info.moves_to_go = nullopt;
+    search_info.depth = nullopt;
+    search_info.nodes = nullopt;
+    search_info.mate = nullopt;
+    search_info.fixed_time = nullopt;
+    search_info.infinite = false;
+    search_info.moves.clear();
+
     bool is_reading_moves = false;
-    optional<chrono::milliseconds> wtime = nullopt;
-    optional<chrono::milliseconds> btime = nullopt;
-    optional<chrono::milliseconds> winc = nullopt;
-    optional<chrono::milliseconds> binc = nullopt;
-    optional<int> moves_to_go = nullopt;
-    optional<int> depth = nullopt;
-    optional<uint64_t> nodes = nullopt;
-    optional<int> mate = nullopt;
-    optional<chrono::milliseconds> fixed_time = nullopt;
-    bool infinite = false;
 
     while (line_stream) {
         string token;
@@ -122,81 +124,69 @@ void UciImpl::OnGoCommand(stringstream& line_stream) {
         else if (token == "wtime") {
             int x;
             line_stream >> x;
-            wtime = std::chrono::milliseconds(x);
+            search_info.wtime = std::chrono::milliseconds(x);
             is_reading_moves = false;
         }
         else if (token == "btime") {
             int x;
             line_stream >> x;
-            btime = std::chrono::milliseconds(x);
+            search_info.btime = std::chrono::milliseconds(x);
             is_reading_moves = false;
         }
         else if (token == "winc") {
             int x;
             line_stream >> x;
-            winc = std::chrono::milliseconds(x);
+            search_info.winc = std::chrono::milliseconds(x);
             is_reading_moves = false;
         }
         else if (token == "binc") {
             int x;
             line_stream >> x;
-            binc = std::chrono::milliseconds(x);
+            search_info.binc = std::chrono::milliseconds(x);
             is_reading_moves = false;
         }
         else if (token == "movestogo") {
             int x;
             line_stream >> x;
-            moves_to_go = x;
+            search_info.moves_to_go = x;
             is_reading_moves = false;
         }
         else if (token == "depth") {
             int x;
             line_stream >> x;
-            depth = x;
+            search_info.depth = x;
             is_reading_moves = false;
         }
         else if (token == "nodes") {
             int x;
             line_stream >> x;
-            nodes = x;
+            search_info.nodes = x;
             is_reading_moves = false;
         }
         else if (token == "mate") {
             int x;
             line_stream >> x;
-            mate = x;
+            search_info.mate = x;
             is_reading_moves = false;
         }
         else if (token == "movetime") {
             int x;
             line_stream >> x;
-            fixed_time = std::chrono::milliseconds(x);
+            search_info.fixed_time = std::chrono::milliseconds(x);
             is_reading_moves = false;
         }
         else if (token == "infinite") {
-            infinite = true;
+            search_info.infinite = true;
             is_reading_moves = false;
         }
         else if (is_reading_moves) {
-            search_moves.push_back(token);
+            search_info.moves.push_back(token);
         }
         else
             cerr << "WARNING: 'go' command unexpected token: '" << token << "'" << endl;
     }
 
-    uci_player.StartSearch(
-        wtime,
-        btime,
-        winc,
-        binc,
-        moves_to_go,
-        depth,
-        nodes,
-        mate,
-        fixed_time,
-        infinite,
-        search_moves
-    );
+    uci_player.StartSearch(search_info);
 }
 
 

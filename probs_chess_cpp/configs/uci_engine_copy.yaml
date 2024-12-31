@@ -8,7 +8,7 @@ model:
     type: resnet
     res_blocks: 11
     filters: 96
-  checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241224-104436*'
+  checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241230-000153*'
 env:
   n_max_episode_steps: 500
 infra:
