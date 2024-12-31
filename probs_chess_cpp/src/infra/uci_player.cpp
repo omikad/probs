@@ -87,8 +87,6 @@ void UciPlayer::SetPosition(const string& starting_fen, const vector<string>& mo
             continuation = true;
     }
 
-    continuation = false;           // TODO : use continuation
-
     if (!continuation) {
         last_pos_fen = starting_fen;
         last_pos_moves.clear();
@@ -284,28 +282,27 @@ lczero::Move UciPlayer::GoSearch__FullSearch() {
     map<pair<float, int>, pair<int, int>> beam; // {(priority, counter) -> (node, kid index)}
     int beam_counter = 0;
 
-    // vector<int> queue({top_node});
-    // for (int qi = 0; qi < (int)queue.size(); qi++) {
-    //     int node = queue[qi];
+    vector<int> queue({top_node});
+    for (int qi = 0; qi < (int)queue.size(); qi++) {
+        int node = queue[qi];
 
-    //     if (node == top_node && nodes[node].q_model_called == false) {
-    //         beam.insert({{1000.0, beam_counter++}, {top_node, -1}});
-    //     }
+        if (node == top_node && nodes[node].q_model_called == false) {
+            beam.insert({{1000.0, beam_counter++}, {top_node, -1}});
+        }
 
-    //     if (nodes[node].q_model_called)
-    //         for (int ki = 0; ki < (int)nodes[node].kids.size(); ki++) {
-    //             auto& kid = nodes[node].kids[ki];
-    //             if (kid.kid_node < 0)
-    //                 beam.insert({{kid.q_nn_score, beam_counter++}, {node, ki}});
-    //             else
-    //                 queue.push_back(kid.kid_node);
-    //         }
+        if (nodes[node].q_model_called)
+            for (int ki = 0; ki < (int)nodes[node].kids.size(); ki++) {
+                auto& kid = nodes[node].kids[ki];
+                if (kid.kid_node < 0)
+                    beam.insert({{kid.q_nn_score, beam_counter++}, {node, ki}});
+                else
+                    queue.push_back(kid.kid_node);
+            }
 
-    //     else                                        // TODO: remove
-    //         for (auto& kid : nodes[node].kids)
-    //             assert(kid.kid_node < 0);
-    // }
-    beam.insert({{1000.0, beam_counter++}, {top_node, -1}});
+        else                                        // TODO: remove
+            for (auto& kid : nodes[node].kids)
+                assert(kid.kid_node < 0);
+    }
 
     while (!search_helper.CheckFlagStop() && beam.size() > 0) {
 
@@ -392,7 +389,6 @@ lczero::Move UciPlayer::GoSearch__FullSearch() {
                 nodes[node].v_tree_score = best_kid_score;
             }
         }
-cerr << "queue.size()=" << queue.size() << endl;
     }
 
     search_helper.PrintSearchStuff();
