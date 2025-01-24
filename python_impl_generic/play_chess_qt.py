@@ -7,7 +7,7 @@ from play_chess_qt_board import ChessBoard
 
 from environments.my_chess_env import create_env_66_func
 import helpers
-import probs_impl_common
+from probs_impl import probs_impl_common
 
 
 class Info(QFrame):

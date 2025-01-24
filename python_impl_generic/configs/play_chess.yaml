@@ -1,0 +1,16 @@
+name: 'Interactive play human vs enemy'
+cmd: interactive_play
+# cmd: play_chess
+env:
+  name: mychess6x6
+  n_max_episode_steps: 200
+infra:
+  device: cpu
+enemy:
+  kind: q_player
+  model:
+    value:
+      class: ValueModel66_v11
+    self_learner:
+      class: SelfLearningModel66_v11
+    checkpoint: 'environments/mychess6x6_v11_checkpoint_20240828-033905.ckpt'

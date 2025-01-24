@@ -36,6 +36,7 @@ UciPlayer::UciPlayer(ConfigParser& config)
         : n_max_episode_steps(config.GetInt("env.n_max_episode_steps", true, 0))
         , q_agent_batch_size(config.GetInt("infra.q_agent_batch_size", true, 0))
         , search_mode(config.GetInt("infra.search_mode", false, 2))
+        , search_features(config.GetInt("infra.search_features", false, 0))
         , tree(lczero::ChessBoard::kStartposFen, n_max_episode_steps)
         , is_in_search(false)
         , stop_search_flag(false)
@@ -224,17 +225,18 @@ lczero::Move UciPlayer::GoSearch__SingleQCall() {
 
 const long long LIMIT_TIME_GAP = 20;
 struct SearchHelper {
-
     SearchConstraintsInfo search_info;
     chrono::high_resolution_clock::time_point start_time;
     optional<long long> limit_time;
+    long long nodes_searched;
     long long calls;
 
     SearchHelper(SearchConstraintsInfo& search_info, bool is_black)
             : search_info(search_info)
             , start_time(chrono::high_resolution_clock::now())
             , limit_time(nullopt)
-            , calls(0) {
+            , calls(0)
+            , nodes_searched(0) {
         if (search_info.fixed_time.has_value())
             limit_time = search_info.fixed_time.value().count();
         else if (!is_black && search_info.wtime.has_value()) {
@@ -265,7 +267,7 @@ struct SearchHelper {
 
     void PrintSearchStuff() {
         long long elapsed = GetElapsedTime();
-        cerr << "Elapsed: " << elapsed << "ms; calls=" << calls << "; ms per call=" << elapsed / calls << endl;
+        cerr << "Elapsed: " << elapsed << "ms; nodes=" << nodes_searched << "; calls=" << calls << "; ms per call=" << (double)elapsed / calls << endl;
     }
 };
 
@@ -293,9 +295,9 @@ lczero::Move UciPlayer::GoSearch__FullSearch() {
                     queue.push_back(kid.kid_node);
             }
     }
+    search_helper.nodes_searched = queue.size();
 
-    while (!search_helper.CheckFlagStop() && beam.size() > 0) {
-
+    while (beam.size() > 0) {
         vector<int> nodes_to_expand;
         while (nodes_to_expand.size() < q_agent_batch_size && beam.size() > 0) {
             auto [node, ki] = beam.rbegin()->second;
@@ -309,6 +311,7 @@ lczero::Move UciPlayer::GoSearch__FullSearch() {
                 assert(kid.kid_node < 0);
                 tree.Move(node, kid.move);
                 kid.kid_node = AppendLastTreeNode();
+                search_helper.nodes_searched++;
                 if (!nodes[kid.kid_node].is_terminal)
                     nodes_to_expand.push_back(kid.kid_node);
             }
@@ -326,6 +329,9 @@ lczero::Move UciPlayer::GoSearch__FullSearch() {
                 assert(kid.kid_node < 0);
             }
         }
+
+        if (search_helper.CheckFlagStop())
+            break;
     }
 
     {

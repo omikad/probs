@@ -71,6 +71,7 @@ class UciPlayer {
         lczero::Move GoSearch__SingleQCall();
         lczero::Move GoSearch__FullSearch();
         int search_mode;
+        int search_features;
         SearchConstraintsInfo search_info;
 
         bool debug_on;

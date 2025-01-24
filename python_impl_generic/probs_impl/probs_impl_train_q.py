@@ -1,18 +1,20 @@
 import numpy as np
 import torch
 import heapq
-from collections import defaultdict, Counter, deque
+from collections import Counter, deque
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
+import environments
 import helpers
-import probs_impl_common
+from probs_impl import probs_impl_common
 
 
 VALUE_MODEL: helpers.BaseValueModel = None
 SELF_LEARNING_MODEL: helpers.BaseSelfLearningModel = None
 GET_DATASET_DEVICE: str = None
-PARAMETERS: probs_impl_common.Parameters = None
+CONFIG: dict = None
+CREATE_ENV_FUNC: Callable[[], helpers.BaseEnv]
 N_ACTIONS: int = None
 
 
@@ -120,8 +122,8 @@ def expand_env_to_tree_data__using_q_s_a(env: helpers.BaseEnv, prev_tree: TreeNo
         * out_stats: dict of stats
     """
 
-    num_q_s_a_calls = PARAMETERS.num_q_s_a_calls
-    max_depth = PARAMETERS.max_depth
+    num_q_s_a_calls = CONFIG['train']['num_q_s_a_calls']
+    max_depth = CONFIG['train']['max_depth']
     MIN_INF = -1e5
 
     tree, beam, stat_depth_sum, stat_depth_cnt, expanded_cnt = init_beam_search(env, prev_tree, prev_action)
@@ -188,7 +190,7 @@ def expand_env_to_tree_data__using_q_s_a(env: helpers.BaseEnv, prev_tree: TreeNo
 
 def get_state_values(to_eval):
     # num_workers=1, pin_memory=True
-    dataloader = helpers.torch_create_dataloader(to_eval, GET_DATASET_DEVICE, batch_size=PARAMETERS.value_batch_size, shuffle=False, drop_last=False)
+    dataloader = helpers.torch_create_dataloader(to_eval, GET_DATASET_DEVICE, batch_size=CONFIG['train']['train_batch_size'], shuffle=False, drop_last=False)
 
     state_values = []
     for batch_input in dataloader:
@@ -233,9 +235,9 @@ def evaluate_tree_data(tree: TreeNode):
 def get_self_learning_model_dataset_rows__using_batch_eval(out_episode_rows: list, out_stats: Counter):
     tree = None
 
-    env = PARAMETERS.create_env_func()
+    env = CREATE_ENV_FUNC()
     action = -1
-    for stepi in range(PARAMETERS.n_max_episode_steps):
+    for stepi in range(CONFIG['env']['n_max_episode_steps']):
 
         action_mask = env.get_valid_actions_mask()
 
@@ -248,10 +250,10 @@ def get_self_learning_model_dataset_rows__using_batch_eval(out_episode_rows: lis
 
         action_values = evaluate_tree_data(tree)
 
-        action, greedy_action = probs_impl_common.sample_action(env, PARAMETERS, action_values, action_mask, is_v_not_q=False)
+        action, greedy_action = probs_impl_common.sample_action(env, CONFIG, action_values, action_mask, is_v_not_q=False)
 
         for dataset_row in env.get_rotated_encoded_states_with_symmetry__q_value_model(action_values):
-            if PARAMETERS.dataset_drop_ratio > 1e-5 and np.random.rand() < PARAMETERS.dataset_drop_ratio:
+            if CONFIG['train']['dataset_drop_ratio'] > 1e-5 and np.random.rand() < CONFIG['train']['dataset_drop_ratio']:
                 continue
             out_episode_rows.append(dataset_row)
 
@@ -280,7 +282,7 @@ def get_dataset_batches_using_batched_eval(n_games: int):
     next_episode_i = 0
     while next_episode_i < n_games or len(tasks_deque) > 0:
 
-        if next_episode_i < n_games and len(tasks_deque) < PARAMETERS.get_q_dataset_batch_size:
+        if next_episode_i < n_games and len(tasks_deque) < CONFIG['train']['get_q_dataset_batch_size']:
             next_episode_i += 1
 
             it = iter(get_self_learning_model_dataset_rows__using_batch_eval(result_rows, stats))
@@ -314,43 +316,31 @@ def get_dataset(
         n_games: int,
         value_model: helpers.BaseValueModel,
         self_learning_model: helpers.BaseSelfLearningModel,
-        params: probs_impl_common.Parameters,
+        config: dict,
         device):
-    global SELF_LEARNING_MODEL
-    global VALUE_MODEL
-    global GET_DATASET_DEVICE
-    global PARAMETERS
-    global N_ACTIONS
+    global SELF_LEARNING_MODEL, VALUE_MODEL, GET_DATASET_DEVICE, CONFIG, CREATE_ENV_FUNC, N_ACTIONS
 
     GET_DATASET_DEVICE = device
 
     VALUE_MODEL = value_model
     SELF_LEARNING_MODEL = self_learning_model
 
-    PARAMETERS = params
-    N_ACTIONS = len(params.create_env_func().get_valid_actions_mask())
+    CONFIG = config
+    CREATE_ENV_FUNC = environments.get_create_env_func(CONFIG['env']['name'])
+    N_ACTIONS = len(CREATE_ENV_FUNC().get_valid_actions_mask())
 
     value_model.eval()
     self_learning_model.eval()
 
     def __yield_dataset_batch_rows():
         # ------------ No multiprocessing, eval by batches
-        if params.self_play_threads == 1:
+        if CONFIG['infra']['self_play_threads'] == 1:
             for dataset_batch_rows, stats in get_dataset_batches_using_batched_eval(n_games):
                 yield dataset_batch_rows, stats
 
         # ------------ Multiprocessing, eval by batches
-        elif params.self_play_threads > 1:
-            raise 1  # not implemented
-            # episode_batches = [[] for _ in range(params.self_play_threads)]
-            # idx = 0
-            # for episode in experience_replay.episodes:
-            #     episode_batches[idx].append(episode)
-            #     idx = (idx + 1) % len(episode_batches)
-
-            # with multiprocessing.get_context("fork").Pool(params.self_play_threads) as multiprocessing_pool:
-            #     for sub_dataset, stats in multiprocessing_pool.imap_unordered(multiprocessing_entry_get_self_learning_dataset_row__using_batch_eval, episode_batches):
-            #         yield sub_dataset, stats
+        elif CONFIG['infra']['self_play_threads'] > 1:
+            raise Exception("TODO")
 
     stats = Counter()
     dataset = []
@@ -365,13 +355,13 @@ def train_q_model(
         dataset,
         value_model: helpers.BaseValueModel,
         self_learning_model: helpers.BaseSelfLearningModel,
-        params: probs_impl_common.Parameters,
+        config: dict,
         device,
         optimizer):
     value_model.eval()
     self_learning_model.train()
 
-    dataloader = helpers.torch_create_dataloader(dataset, device, params.self_learning_batch_size, shuffle=True, drop_last=True)
+    dataloader = helpers.torch_create_dataloader(dataset, device, config['train']['train_batch_size'], shuffle=True, drop_last=True)
 
     for batch_input in dataloader:
         # for inp_tensor in batch_input: print(f"[train_self_learning_model] inp_tensor {inp_tensor.shape} {inp_tensor.dtype}")

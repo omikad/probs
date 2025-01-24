@@ -2,59 +2,20 @@ import heapq
 import time
 import numpy as np
 import torch
-from dataclasses import dataclass
-from typing import Callable
 
 
 import helpers
 import environments
 
 
-@dataclass
-class Parameters:
-    env_name: str
-    create_env_func: Callable
-
-    sub_processes_cnt: int
-    self_play_threads: int
-
-    value_lr: float
-    value_batch_size: int
-
-    self_learning_lr: float
-    self_learning_batch_size: int
-    get_q_dataset_batch_size: int
-
-    alphazero_move_num_sampling_moves: float
-    v_pick_second_best_prob: float
-    greedy_action_freq: float
-    dirichlet_alpha: float
-    exploration_fraction: float
-
-    mem_max_episodes: int
-    n_high_level_iterations: int
-    n_max_episode_steps: int
-    q_dataset_episodes_sub_iter: int
-    v_train_episodes: int
-    q_train_episodes: int
-    dataset_drop_ratio: float
-
-    num_q_s_a_calls: int
-    max_depth: int
-
-    evaluate_agent: helpers.BaseAgent
-    evaluate_n_games: int
-
-    checkpoints_dir: str
-
-
-def sample_action(env: helpers.BaseEnv, params: Parameters, action_values, action_mask, is_v_not_q: bool):
+def sample_action(env: helpers.BaseEnv, config: dict, action_values, action_mask, is_v_not_q: bool):
     assert action_values.shape == action_mask.shape
 
-    alphazero_move_num_sampling_moves = params.alphazero_move_num_sampling_moves
-    greedy_action_freq = params.greedy_action_freq
-    dirichlet_alpha = params.dirichlet_alpha
-    exploration_fraction = params.exploration_fraction
+    alphazero_move_num_sampling_moves = config['train'].get('alphazero_move_num_sampling_moves', None)
+    greedy_action_freq = config['train'].get('greedy_action_freq', None)
+    dirichlet_alpha = config['train'].get('dirichlet_alpha', None)
+    exploration_fraction = config['train'].get('exploration_fraction', None)
+    v_pick_second_best_prob = config['train'].get('v_pick_second_best_prob', 0)
 
     if alphazero_move_num_sampling_moves is not None:
 
@@ -68,7 +29,7 @@ def sample_action(env: helpers.BaseEnv, params: Parameters, action_values, actio
             probs = np.exp(probs - np.max(probs))
             probs /= np.sum(probs)
             action = np.random.choice(I, p=probs)
-        elif is_v_not_q and params.v_pick_second_best_prob > 0 and np.random.rand() <= params.v_pick_second_best_prob:
+        elif is_v_not_q and v_pick_second_best_prob > 0 and np.random.rand() <= v_pick_second_best_prob:
             probs[greedy_i] = 1e-5
             action = I[np.argmax(probs)]
         else:
@@ -98,7 +59,7 @@ def sample_action(env: helpers.BaseEnv, params: Parameters, action_values, actio
     return action, greedy_action
 
 
-def get_q_a_single_state(value_model: helpers.BaseValueModel, self_learning_model: helpers.BaseSelfLearningModel, env: helpers.BaseEnv, device: str):
+def get_q_a_single_state(value_model: helpers.BaseValueModel, self_learning_model: helpers.BaseSelfLearningModel, env: helpers.BaseEnv, device):
     inputs = env.get_rotated_encoded_state()
     input_tensors = [ torch.as_tensor(np.expand_dims(inp, axis=0)).to(device) for inp in inputs ]
 
@@ -117,7 +78,7 @@ def get_q_a_single_inputs(value_model: helpers.BaseValueModel, self_learning_mod
     return action_values
 
 
-def get_q_a_multi_inputs(value_model: helpers.BaseValueModel, self_learning_model: helpers.BaseSelfLearningModel, inputs_collection, device: str):
+def get_q_a_multi_inputs(value_model: helpers.BaseValueModel, self_learning_model: helpers.BaseSelfLearningModel, inputs_collection, device):
     # inputs_collection - list where each row is result of env.get_rotated_encoded_state()
     input_tensors = []
     for i in range(len(inputs_collection[0])):
@@ -132,7 +93,7 @@ def get_q_a_multi_inputs(value_model: helpers.BaseValueModel, self_learning_mode
 
 
 class SelfLearningAgent(helpers.BaseAgent):
-    def __init__(self, name, model_keeper: helpers.ModelKeeper, device: str):
+    def __init__(self, name, model_keeper: helpers.ModelKeeper, device):
         self.value_model = model_keeper.models['value']
         self.self_learning_model = model_keeper.models['self_learner']
         self.name = name
@@ -160,72 +121,70 @@ class SelfLearningAgent(helpers.BaseAgent):
         return self.name
 
 
-def parse_model_str(model_str):
-    res = dict()
-    for part in model_str.split(','):
-        key, val = part.split('=')
-        res[key] = val
-    return res
-
-
-def create_model_keeper(args, env, train_params, model_str) -> helpers.ModelKeeper:
-    parsed_model_str = parse_model_str(model_str)
-
+def create_model_keeper(model_config, env_name: str) -> helpers.ModelKeeper:
     model_keeper = helpers.ModelKeeper()
 
-    model_keeper.models['value'] = environments.create_value_model(env, parsed_model_str['V'])
-    model_keeper.models['self_learner'] = environments.create_self_learning_model(env, parsed_model_str['SL'])
+    for model_key in ['value', 'self_learner']:
+        if model_key in model_config:
+            model = environments.create_model(env_name, model_config[model_key]['class'])
+            model_keeper.models[model_key] = model
+            if 'learning_rate' in model_config[model_key]:
+                lr = model_config[model_key]['learning_rate']
+                wd = model_config[model_key]['weight_decay']
+                model_keeper.optimizers[model_key] = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
 
-    if train_params is not None:
-        model_keeper.optimizers['value'] = torch.optim.AdamW( model_keeper.models['value'].parameters(), lr=train_params.value_lr, weight_decay=1e-5)
-        model_keeper.optimizers['self_learner'] = torch.optim.AdamW(model_keeper.models['self_learner'].parameters(), lr=train_params.self_learning_lr, weight_decay=1e-5)
+    if 'checkpoint' in model_config:
+        checkpoint_filename = model_config['checkpoint']
+        model_keeper.load_from_checkpoint(checkpoint_filename)
+        print(f"Loaded checkpoint content from `{checkpoint_filename}`:")
 
-    if 'CKPT' in parsed_model_str:
-        checkpoint = parsed_model_str['CKPT']
-        model_keeper.load_from_checkpoint(checkpoint)
-        print(f"Models loaded from `{checkpoint}`:")
-
-    for name, model in model_keeper.models.items():
+    for key, model in model_keeper.models.items():
         total_parameters = sum(p.numel() for p in model.parameters())
-        print(f"  {name}: {model.__class__.__name__} Params cnt: {total_parameters}")
+        print(f"Model: {key}: {model.__class__.__name__} Params cnt: {total_parameters}")
+
+    print("Optimizers:", ', '.join(model_keeper.optimizers.keys()) if model_keeper.optimizers else 'none')
 
     return model_keeper
 
 
-def create_agent(args, env, train_params, model_str, device: str) -> helpers.BaseAgent:
-    if model_str == 'random':
+def create_agent(player_config: dict, env_name: str, device) -> helpers.BaseAgent:
+    kind = player_config['kind']
+    if kind == 'random':
         return helpers.RandomAgent()
-    if model_str == 'one_step_lookahead':
+    if kind == 'one_step_lookahead':
         return helpers.OneStepLookaheadAgent()
-    if model_str == 'two_step_lookahead':
+    if kind == 'two_step_lookahead':
         return helpers.TwoStepLookaheadAgent()
-    if model_str == 'three_step_lookahead':
+    if kind == 'three_step_lookahead':
         return helpers.ThreeStepLookaheadAgent()
-    elif 'budget_lookahead' in model_str:
-        parsed_model_str = parse_model_str(model_str)
-        return helpers.BudgetLookahead(time_budget=float(parsed_model_str['time_budget']))
-    else:
-        parsed_model_str = parse_model_str(model_str)
-        model_keeper = create_model_keeper(args, env, train_params, model_str=model_str)
+    if kind == 'q_player':
+        model_keeper = create_model_keeper(player_config['model'], env_name)
         model_keeper.eval()
+        model_keeper.to(device)
+        return SelfLearningAgent(model_keeper.models['self_learner'].__class__.__name__, model_keeper=model_keeper, device=device)
+    elif kind == 'q_player_tree_search':
+        model_keeper = create_model_keeper(player_config['model'], env_name)
+        model_keeper.eval()
+        model_keeper.to(device)
+        return SelfLearningAgent_TreeScan(
+            model_keeper.models['self_learner'].__class__.__name__ + ".with_tree_search",
+            model_keeper=model_keeper,
+            device=device,
+            action_time_budget=player_config['action_time_budget'],
+            expand_tree_budget=player_config['expand_tree_budget'],
+            batch_size=player_config['train_batch_size'])
 
-        if 'agent_type' not in parsed_model_str or parsed_model_str['agent_type'] == 'qval':
-            return SelfLearningAgent(model_keeper.models['self_learner'].__class__.__name__, model_keeper=model_keeper, device=device)
-
-        if parsed_model_str['agent_type'] == 'qvalts':
-            return SelfLearningAgent_TreeScan(model_str, model_keeper=model_keeper, device=device)
-
-    raise Exception(f"Unknown agent type `{model_str}`")
+    raise Exception(f"Unknown agent kind `{kind}`")
 
 
 class SelfLearningAgent_TreeScan(helpers.BaseAgent):
-    def __init__(self, name, model_keeper: helpers.ModelKeeper, device: str):
+    def __init__(self, name, model_keeper: helpers.ModelKeeper, device, action_time_budget: float, expand_tree_budget: int, batch_size: int):
         self.self_learning_model = model_keeper.models['self_learner']
         self.name = name
         self.device = device
-        self.action_time_budget = 3.0
-        self.expand_tree_budget = 20000
-        self.batch_size = 10
+        self.action_time_budget = action_time_budget
+        self.expand_tree_budget = expand_tree_budget
+        self.batch_size = batch_size
         self.last_search_time = 0
         self.last_search_nodes_cnt = 0
 

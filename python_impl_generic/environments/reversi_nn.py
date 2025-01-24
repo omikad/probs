@@ -3,26 +3,6 @@ import torch
 import helpers
 
 
-DEFAULT_TRAIN_PARAMS = {
-    'value_lr': 1e-3,
-    'value_batch_size': 256,
-
-    'self_learning_lr': 1e-3,
-    'self_learning_batch_size': 256,
-
-    'dirichlet_alpha': 0.2,
-    'exploration_fraction': 0.25,
-}
-
-
-def create_value_model(ARGS, value_model_class_name):
-    return globals()[value_model_class_name]()
-
-
-def create_self_learning_model(ARGS, self_learning_model_class_name):
-    return globals()[self_learning_model_class_name]()
-
-
 def forward_common_model1(board, action_mask, pass_action_flag, model_cnn):
     assert board.shape == (board.shape[0], 8, 8)
     assert action_mask.shape == (board.shape[0], 64)

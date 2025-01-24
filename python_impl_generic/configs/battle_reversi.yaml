@@ -1,0 +1,21 @@
+name: 'Evaluate agents via battle against each other'
+cmd: battle
+env:
+  name: reversi
+  n_max_episode_steps: 200
+evaluate:
+  evaluate_n_games: 1000
+  randomize_n_turns: 2    # Number of first turns to play randomly (helps to evaluate deterministic players)
+infra:
+  threads_cnt: 5
+  device: cpu
+player1:
+  kind: q_player
+  model:
+    value:
+      class: ValueModel1
+    self_learner:
+      class: SelfLearningModel1
+    # checkpoint: 'checkpoint.ckpt'
+player2:
+  kind: two_step_lookahead

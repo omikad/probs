@@ -1,0 +1,19 @@
+name: 'Evaluate agents via battle against each other. Example with connect four'
+cmd: battle
+env:
+  name: connect_four
+  n_max_episode_steps: 200
+evaluate:
+  evaluate_n_games: 100
+  randomize_n_turns: 0    # Number of first turns to play randomly (helps to evaluate deterministic players)
+infra:
+  threads_cnt: 5
+  device: cpu
+player1:
+  kind: random
+  # kind: one_step_lookahead
+player2:
+  # kind: random
+  kind: one_step_lookahead
+  # kind: two_step_lookahead
+  # kind: three_step_lookahead

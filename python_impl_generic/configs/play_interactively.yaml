@@ -1,0 +1,17 @@
+name: 'Interactive play human vs enemy'
+cmd: interactive_play
+env:
+  name: mychess4x5
+  # name: mychess6x6
+  # name: mychess8x6
+  # name: mychess8x8
+  # name: connect_four
+  # name: reversi
+  n_max_episode_steps: 200
+infra:
+  device: cpu
+enemy:
+  kind: 'random'
+  # kind: 'one_step_lookahead'
+  # kind: 'two_step_lookahead'
+  # kind: 'three_step_lookahead'

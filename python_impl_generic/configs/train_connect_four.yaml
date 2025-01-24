@@ -1,0 +1,39 @@
+name: 'Train agent playing connect four game'
+cmd: train
+env:
+  name: connect_four
+  n_max_episode_steps: 200
+evaluate:
+  evaluate_n_games: 100
+  randomize_n_turns: 2    # Number of first turns to play randomly (helps to evaluate deterministic players)
+  enemy:
+    kind: two_step_lookahead
+infra:
+  sub_processes_cnt: 5
+  self_play_threads: 1
+  mem_max_episodes: 100000
+  device: gpu
+  # log: mem
+  log: tf
+train:
+  n_high_level_iterations: 100
+  q_dataset_episodes_sub_iter: 1
+  v_train_episodes: 10000
+  q_train_episodes: 1000
+  dataset_drop_ratio: 0.1
+  num_q_s_a_calls: 10
+  checkpoints_dir: 'checkpoints'
+  train_batch_size: 32
+  self_learning_batch_size: 32
+  get_q_dataset_batch_size: 32
+  max_depth: 100
+  alphazero_move_num_sampling_moves: 7
+model:
+  value:
+    class: ValueModelCF_v1
+    learning_rate: 0.0003
+    weight_decay: 0
+  self_learner:
+    class: SelfLearningModelCF_v1
+    learning_rate: 0.0003
+    weight_decay: 0

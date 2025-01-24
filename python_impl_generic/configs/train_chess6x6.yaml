@@ -1,0 +1,39 @@
+name: 'Train agent playing chess 6x6 game'
+cmd: train
+env:
+  name: mychess6x6
+  n_max_episode_steps: 200
+evaluate:
+  evaluate_n_games: 100
+  randomize_n_turns: 2    # Number of first turns to play randomly (helps to evaluate deterministic players)
+  enemy:
+    kind: two_step_lookahead
+infra:
+  sub_processes_cnt: 10
+  self_play_threads: 1
+  mem_max_episodes: 100000
+  device: gpu
+  # log: mem
+  log: tf
+train:
+  n_high_level_iterations: 10000000
+  q_dataset_episodes_sub_iter: 1
+  v_train_episodes: 6000
+  q_train_episodes: 3000
+  dataset_drop_ratio: 0.75
+  num_q_s_a_calls: 50
+  checkpoints_dir: 'checkpoints'
+  train_batch_size: 256
+  self_learning_batch_size: 256
+  get_q_dataset_batch_size: 256
+  max_depth: 100
+  alphazero_move_num_sampling_moves: 20
+model:
+  value:
+    class: ValueModel66_v11
+    learning_rate: 0.0003
+    weight_decay: 0
+  self_learner:
+    class: SelfLearningModel66_v11
+    learning_rate: 0.0003
+    weight_decay: 0
