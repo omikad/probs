@@ -81,6 +81,7 @@
         "socket": "cpp",
         "io_context": "cpp",
         "executor": "cpp",
-        "future": "cpp"
+        "future": "cpp",
+        "semaphore": "cpp"
     }
 }

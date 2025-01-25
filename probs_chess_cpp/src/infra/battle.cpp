@@ -74,40 +74,39 @@ BattleInfo ComparePlayers(IPlayer& player1, IPlayer& player2, int evaluate_n_gam
 }
 
 
+unique_ptr<IPlayer> CreatePlayer(const ConfigParser& config_parser, const string& player_config_path) {
+    string kind = config_parser.GetString(player_config_path + ".kind");
+    if (kind == "random")
+        return make_unique<RandomPlayer>(RandomPlayer("RandomPlayer." + player_config_path));
+    if (kind == "one_step_lookahead")
+        return make_unique<NStepLookaheadPlayer>(NStepLookaheadPlayer("NStepLookaheadPlayer." + player_config_path, 1));
+    if (kind == "two_step_lookahead")
+        return make_unique<NStepLookaheadPlayer>(NStepLookaheadPlayer("NStepLookaheadPlayer." + player_config_path, 2));
+    if (kind == "three_step_lookahead")
+        return make_unique<NStepLookaheadPlayer>(NStepLookaheadPlayer("NStepLookaheadPlayer." + player_config_path, 3));
+    if (kind == "v_resnet_player" || kind == "q_resnet_player") {
+        ModelKeeper model_keeper(config_parser, player_config_path + ".model");
+        auto device = GetDeviceFromConfig(config_parser);
+        cout << "Device " << device << endl;
+        model_keeper.To(device);
+        model_keeper.SetEvalMode();
+
+        if (kind == "v_resnet_player")
+            return make_unique<VResnetPlayer>(VResnetPlayer(model_keeper.v_model, device, "VResnetPlayer." + player_config_path));
+        if (kind == "q_resnet_player")
+            return make_unique<QResnetPlayer>(QResnetPlayer(model_keeper.q_model, device, "QResnetPlayer." + player_config_path));
+    }
+    throw Exception("Unknown player.kind attribute value");
+}
+
+
 void GoBattle(const ConfigParser& config_parser) {
     torch::NoGradGuard no_grad;
 
     int random_first_turns = config_parser.GetInt("battle.random_first_turns", false, 0);
 
-    IPlayer* player1;
-    IPlayer* player2;
-
-    for (int pi = 1; pi <= 2; pi++) {
-        string kind = config_parser.GetString("player" + to_string(pi) + ".kind");
-        if (kind == "random")
-            (pi == 1 ? player1 : player2) = new RandomPlayer("RandomPlayer" + to_string(pi));
-        else if (kind == "one_step_lookahead")
-            (pi == 1 ? player1 : player2) = new NStepLookaheadPlayer("NStepLookaheadPlayer" + to_string(pi), 1);
-        else if (kind == "two_step_lookahead")
-            (pi == 1 ? player1 : player2) = new NStepLookaheadPlayer("NStepLookaheadPlayer" + to_string(pi), 2);
-        else if (kind == "three_step_lookahead")
-            (pi == 1 ? player1 : player2) = new NStepLookaheadPlayer("NStepLookaheadPlayer" + to_string(pi), 3);
-        else if (kind == "v_resnet_player" || kind == "q_resnet_player") {
-            ModelKeeper model_keeper(config_parser, "player" + to_string(pi) + ".model");
-            auto device = GetDeviceFromConfig(config_parser);
-            cout << "Device " << device << endl;
-            model_keeper.To(device);
-            model_keeper.SetEvalMode();
-
-            if (kind == "v_resnet_player")
-                (pi == 1 ? player1 : player2) = new VResnetPlayer(model_keeper.v_model, device, "VResnetPlayer" + to_string(pi));
-            else if (kind == "q_resnet_player")
-                (pi == 1 ? player1 : player2) = new QResnetPlayer(model_keeper.q_model, device, "QResnetPlayer" + to_string(pi));
-        }
-        else {
-            throw Exception("Unknown player.kind attribute value");
-        }
-    }
+    auto player1 = CreatePlayer(config_parser, "player1");
+    auto player2 = CreatePlayer(config_parser, "player2");
 
     int evaluate_n_games = config_parser.GetInt("infra.evaluate_n_games", true, 0);
     int n_max_episode_steps = config_parser.GetInt("env.n_max_episode_steps", true, 0);
@@ -132,9 +131,6 @@ void GoBattle(const ConfigParser& config_parser) {
     double player2_score = (w2 + (double)d1 / 2) / games;
     cout << "Player " << player1->GetName() << " score=" << player1_score << endl;
     cout << "Player " << player2->GetName() << " score=" << player2_score << endl;
-
-    delete player1;
-    delete player2;
 }
 
 }    // namespace probs

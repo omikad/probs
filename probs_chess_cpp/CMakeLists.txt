@@ -1,14 +1,15 @@
 cmake_minimum_required(VERSION 3.17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # produce compile_commands.json
 
 execute_process (COMMAND bash -c "PYTHONPATH=../py_binding/ python3 ../py_binding/gen_py_bindings.py ../src/python/generated_bindings.cpp")
 
-# Project Name
 project(ProbsChess)
 
 # set(CMAKE_BUILD_TYPE RelWithDebInfo)
 
 # Conda env
 list(APPEND CMAKE_PREFIX_PATH "/home/excellent/miniconda3/envs/ds")
+list(APPEND CMAKE_PREFIX_PATH "/usr/lib/x86_64-linux-gnu/cmake/yaml-cpp")
 
 # Specify the C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -50,10 +51,7 @@ include_directories(${PYTHON_INCLUDE_DIRS})
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
-target_link_libraries(ProbsChess PRIVATE Threads::Threads)
-
-target_link_libraries(ProbsChess PRIVATE yaml-cpp "${TORCH_LIBRARIES}" ${PYTHON_LIBRARIES})
-
+target_link_libraries(ProbsChess PRIVATE Threads::Threads yaml-cpp "${TORCH_LIBRARIES}" ${PYTHON_LIBRARIES})
 
 # Python bindings build
 find_package(pybind11 CONFIG REQUIRED)

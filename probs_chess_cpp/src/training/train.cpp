@@ -136,6 +136,7 @@ void ProbsImpl::GoTrain() {
     int tree_num_q_s_a_calls = config_parser.GetInt("training.tree_num_q_s_a_calls", true, 0);
     int tree_max_depth = config_parser.GetInt("training.tree_max_depth", true, 0);
     int evaluate_n_games = config_parser.GetInt("infra.evaluate_n_games", true, 0);
+    int randomize_n_turns = config_parser.GetInt("evaluate.randomize_n_turns", true, 0);
 
     cout << "[TRAIN] Start training:" << endl;
     cout << "  batch_size = " << batch_size << endl;
@@ -148,6 +149,7 @@ void ProbsImpl::GoTrain() {
     cout << "  q_train_episodes = " << q_train_episodes << endl;
     cout << "  tree_num_q_s_a_calls = " << tree_num_q_s_a_calls << endl;
     cout << "  tree_max_depth = " << tree_max_depth << endl;
+    cout << "  randomize_n_turns = " << randomize_n_turns << endl;
 
     std::time_t t =  std::time(NULL);
     std::tm tm    = *std::localtime(&t);
@@ -163,10 +165,8 @@ void ProbsImpl::GoTrain() {
     model_keeper.To(device);
     model_keeper.SetEvalMode();
 
-    IPlayer* player1;
-    IPlayer* player2;
-    player1 = new QResnetPlayer(model_keeper.q_model, device, "QResnetPlayer");
-    player2 = new NStepLookaheadPlayer("OneStepLookahead", 1);
+    auto player1 = make_unique<QResnetPlayer>(QResnetPlayer(model_keeper.q_model, device, "QResnetPlayer"));
+    auto player2 = CreatePlayer(config_parser, "evaluate.enemy");
     cout << "  evaluate on " << evaluate_n_games << " games " << player1->GetName() << " vs " << player2->GetName() << endl;
 
     for (int high_level_i = 0; high_level_i < n_high_level_iterations; high_level_i++) {
@@ -185,7 +185,7 @@ void ProbsImpl::GoTrain() {
         cout << "[TRAIN] V model score on starting fen: " << GetVScoreOnStartingBoard(model_keeper.v_model, device) << endl;
         usage.MarkCheckpoint("save models");
 
-        BattleInfo battle_info = ComparePlayers(*player1, *player2, evaluate_n_games, n_max_episode_steps);
+        BattleInfo battle_info = ComparePlayers(*player1, *player2, evaluate_n_games, n_max_episode_steps, randomize_n_turns);
         int w = battle_info.results[0][0] + battle_info.results[0][1];
         int d = battle_info.results[1][0] + battle_info.results[1][1];
         int l = battle_info.results[2][0] + battle_info.results[2][1];
@@ -206,8 +206,6 @@ void ProbsImpl::GoTrain() {
     for (int wi = 0; wi < workers.size(); wi++) taskQueues[wi].enqueue(nullptr);
     for (auto& worker : workers) worker.join();
 
-    delete player1;
-    delete player2;
     losses_file.close();
 }
 

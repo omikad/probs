@@ -25,6 +25,7 @@ class QTrainNode {
         vector<MoveEstimation> moves_estimation;
         int depth;          // depth from top node
         optional<float> v_estimation;
+        float sum_q_estimation_delta;
 
         int transform;
         lczero::InputPlanes input_planes;
@@ -196,17 +197,46 @@ struct EnvExpandState {
             if (qnode->IsLeaf())
                 return leaf_values[node];
 
+            float sum_q_estimation_delta = 0;
             float curr_val = -1000.0;
 
             assert(qnode->kids.size() == qnode->moves_estimation.size());
             for (int ki = 0; ki < qnode->kids.size(); ki++) {
-                float kid_val = self(self, qnode->kids[ki]);
-                qnode->moves_estimation[ki].score = -kid_val;
-                curr_val = max(curr_val, -kid_val);
+                float this_kid_val = -self(self, qnode->kids[ki]);
+                sum_q_estimation_delta += abs(this_kid_val - qnode->moves_estimation[ki].score);
+                curr_val = max(curr_val, this_kid_val);
+                qnode->moves_estimation[ki].score = this_kid_val;
             }
+
+            qnode->sum_q_estimation_delta = sum_q_estimation_delta;
+
             return curr_val;
         };
         dfs(dfs, top_node);
+    }
+
+    vector<int> GetHardestNodes(int start_node, int q_add_hardest_nodes_per_step) {
+        set<pair<float, int>> heap;
+
+        auto dfs = [&](auto& self, int node)->void {
+            QTrainNode* qnode = nodes[node];
+            if (qnode->IsLeaf())
+                return;
+
+            for (int kid : qnode->kids)
+                self(self, kid);
+
+            heap.insert({qnode->sum_q_estimation_delta, node});
+            if ((int)heap.size() > q_add_hardest_nodes_per_step)
+                heap.erase(heap.begin());
+        };
+        dfs(dfs, start_node);
+
+        vector<int> harderst_nodes;
+        for (auto kvp : heap)
+            harderst_nodes.push_back(kvp.second);
+
+        return harderst_nodes;
     }
 
     // Clear memory of all kids of the given `new_top_node`, except kid `keep_kid` and its subtree
@@ -342,21 +372,20 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
     bool exploration_full_random = config_parser.GetInt("training.exploration_full_random", false, 0) > 0;
     int tree_num_q_s_a_calls = config_parser.GetInt("training.tree_num_q_s_a_calls", true, 0);
     int tree_max_depth = config_parser.GetInt("training.tree_max_depth", true, 0);
+    int q_add_hardest_nodes_per_step = config_parser.GetInt("training.q_add_hardest_nodes_per_step", false, 0);
     bool is_test = config_parser.GetInt("training.is_test", false, 0) > 0;
 
     int game_idx = 0;
     map<string, vector<long long>> stats;
     QDataset rows;
     vector<vector<pair<int, int>>> tree_rows;  // env_index -> [(row_idx, node)]
-    // UsageCounter usage;
-
     vector<EnvExpandState*> envs;
 
     while (game_idx < n_games || envs.size() > 0) {
 
         if (envs.size() < batch_size && game_idx < n_games) {
             EnvExpandState* env = new EnvExpandState(lczero::ChessBoard::kStartposFen, n_max_episode_steps);
-            env->node_going_to_dataset = true;
+            env->node_going_to_dataset = rand() % 1000000 > dataset_drop_ratio * 1000000;
             envs.push_back(env);
             tree_rows.push_back({});
             game_idx++;
@@ -364,8 +393,6 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
         else {
             vector<int> nodes;
             vector<QTrainNode*> qnodes;
-
-            // usage.MarkCheckpoint("1. Init");
 
             for (int ei = 0; ei < envs.size(); ei++) {
                 int node = envs[ei]->PopTopPriorityNode();
@@ -377,11 +404,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                 qnodes.push_back(envs[ei]->nodes[node]);
             }
 
-            // usage.MarkCheckpoint("2. Pop nodes");
-
             GetQModelEstimation_Nodes(qnodes, q_model, device);
-
-            // usage.MarkCheckpoint("3. Q estimate");
 
             for (QTrainNode* qnode : qnodes) {
                 assert(qnode->state == NodeState::FRONTIER_MOVES_COMPUTED);
@@ -391,28 +414,30 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
             for (int ei = 0; ei < envs.size(); ei++)
                 envs[ei]->ExpandNodeAfterQComputed(nodes[ei], tree_max_depth);
 
-            // usage.MarkCheckpoint("4. Expand");
-
             for (int ei = envs.size() - 1; ei >= 0; ei--) {
                 envs[ei]->n_qsa_calls++;
                 
                 if (envs[ei]->beam.size() > 0 && envs[ei]->n_qsa_calls < tree_num_q_s_a_calls)    // need expand more
                     continue;
 
-                // usage.MarkCheckpoint("5. Pre compute V");
-
                 envs[ei]->ComputeTreeValues(v_model, device, batch_size);
-
-                // usage.MarkCheckpoint("6. Compute V");
 
                 while (true) {
                     int prev_top_node = envs[ei]->top_node;
                     assert(envs[ei]->tree.GetGameResult(prev_top_node) == lczero::GameResult::UNDECIDED);
 
-                    if (envs[ei]->node_going_to_dataset) {
-                        QTrainNode* qnode = envs[ei]->nodes[prev_top_node];
+                    vector<int> dataset_nodes;
+                    if (envs[ei]->node_going_to_dataset)
+                        dataset_nodes.push_back(prev_top_node);
+                    if (q_add_hardest_nodes_per_step > 0)
+                        for (int node : envs[ei]->GetHardestNodes(prev_top_node, q_add_hardest_nodes_per_step))
+                            if (rand() % 1000000 > dataset_drop_ratio * 1000000)
+                                dataset_nodes.push_back(node);
 
-                        tree_rows[ei].push_back({ rows.size(), prev_top_node });
+                    for (int node : dataset_nodes) {
+                        QTrainNode* qnode = envs[ei]->nodes[node];
+
+                        tree_rows[ei].push_back({ rows.size(), node });
                         rows.push_back({});
                         assert(qnode->input_planes.size() == lczero::kInputPlanes);
                         rows.back().input_planes = qnode->input_planes;
@@ -467,16 +492,12 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                         break;
                     // if beam is empty - play until game is decided and add all moves to the dataset
                 }
-
-                // usage.MarkCheckpoint("7. Finalizing");
             }
         }
     }
     assert(envs.size() == 0);
     if (is_test)
         cout << "Q train ok" << endl;
-
-    // usage.PrintStats();
 
     for (auto& kvp : stats) {
         long long cnt = kvp.second.size();
