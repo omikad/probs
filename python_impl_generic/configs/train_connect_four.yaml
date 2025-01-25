@@ -5,7 +5,7 @@ env:
   n_max_episode_steps: 200
 evaluate:
   evaluate_n_games: 100
-  randomize_n_turns: 2    # Number of first turns to play randomly (helps to evaluate deterministic players)
+  randomize_n_turns: 2
   enemy:
     kind: two_step_lookahead
 infra:
@@ -16,7 +16,7 @@ infra:
   # log: mem
   log: tf
 train:
-  n_high_level_iterations: 100
+  n_high_level_iterations: 50
   q_dataset_episodes_sub_iter: 1
   v_train_episodes: 10000
   q_train_episodes: 1000
@@ -28,6 +28,7 @@ train:
   get_q_dataset_batch_size: 32
   max_depth: 100
   alphazero_move_num_sampling_moves: 7
+  q_add_hardest_nodes_per_step: 10
 model:
   value:
     class: ValueModelCF_v1

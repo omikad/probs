@@ -59,7 +59,17 @@ def sample_action(env: helpers.BaseEnv, config: dict, action_values, action_mask
     return action, greedy_action
 
 
-def get_q_a_single_state(value_model: helpers.BaseValueModel, self_learning_model: helpers.BaseSelfLearningModel, env: helpers.BaseEnv, device):
+def env_states_to_tensors(inputs_collection: list[list[np.ndarray]], device):
+    # inputs_collection - list where each row is result of env.get_rotated_encoded_state()
+    input_tensors = []
+    for i in range(len(inputs_collection[0])):
+        inps = [ torch.Tensor(inp[i]) for inp in inputs_collection ]
+        inps = torch.stack(inps).to(device)
+        input_tensors.append(inps)
+    return input_tensors
+
+
+def get_q_a_single_state(self_learning_model: helpers.BaseSelfLearningModel, env: helpers.BaseEnv, device):
     inputs = env.get_rotated_encoded_state()
     input_tensors = [ torch.as_tensor(np.expand_dims(inp, axis=0)).to(device) for inp in inputs ]
 
@@ -69,27 +79,55 @@ def get_q_a_single_state(value_model: helpers.BaseValueModel, self_learning_mode
     return action_values
 
 
-def get_q_a_single_inputs(value_model: helpers.BaseValueModel, self_learning_model: helpers.BaseSelfLearningModel, inputs):
-    input_tensors = [ torch.as_tensor(np.expand_dims(inp, axis=0)) for inp in inputs ]
-
-    action_values = self_learning_model.forward(*input_tensors)
-    action_values = action_values.detach().cpu().numpy()[0, :]
-
-    return action_values
-
-
-def get_q_a_multi_inputs(value_model: helpers.BaseValueModel, self_learning_model: helpers.BaseSelfLearningModel, inputs_collection, device):
-    # inputs_collection - list where each row is result of env.get_rotated_encoded_state()
-    input_tensors = []
-    for i in range(len(inputs_collection[0])):
-        inps = [ torch.Tensor(inp[i]) for inp in inputs_collection ]
-        inps = torch.stack(inps).to(device)
-        input_tensors.append(inps)
+def get_q_a_multi_inputs(self_learning_model: helpers.BaseSelfLearningModel, inputs_collection, device):
+    input_tensors = env_states_to_tensors(inputs_collection, device)
 
     action_values = self_learning_model.forward(*input_tensors)
     action_values = action_values.detach().cpu().numpy()
 
     return action_values
+
+
+class VModelAgent(helpers.BaseAgent):
+    def __init__(self, name, model_keeper: helpers.ModelKeeper, device):
+        self.value_model = model_keeper.models['value']
+        self.self_learning_model = model_keeper.models['self_learner']
+        self.name = name
+        self.device = device
+
+    def get_action(self, env: helpers.BaseEnv):
+        inputs_collection = []
+        inputs_actions = []
+        action_and_values = dict()
+
+        for action in env.get_valid_actions_iter():
+            copy_env = env.copy()
+            reward, done = copy_env.step(action)
+
+            if done:
+                action_and_values[action] = reward
+            else:
+                inputs = copy_env.get_rotated_encoded_state()
+                inputs = [arr.copy() for arr in inputs]
+                inputs_collection.append(inputs)
+                inputs_actions.append(action)
+
+        if len(inputs_actions) > 0:
+            input_tensors = env_states_to_tensors(inputs_collection, self.device)
+            action_values = self.value_model.forward(*input_tensors)
+            action_values = action_values.detach().cpu().numpy()[:, 0]
+            for action, value in zip(inputs_actions, action_values):
+                action_and_values[action] = -value
+
+        action = max(action_and_values.items(), key=lambda t: t[1])[0]
+        return action
+
+    def eval(self):
+        self.value_model.eval()
+        self.self_learning_model.eval()
+
+    def get_name(self):
+        return self.name
 
 
 class SelfLearningAgent(helpers.BaseAgent):
@@ -100,7 +138,7 @@ class SelfLearningAgent(helpers.BaseAgent):
         self.device = device
 
     def get_action(self, env: helpers.BaseEnv):
-        action_values = get_q_a_single_state(self.value_model, self.self_learning_model, env, self.device)
+        action_values = get_q_a_single_state(self.self_learning_model, env, self.device)
 
         action_mask = env.get_valid_actions_mask()
         assert action_values.shape == action_mask.shape
@@ -162,6 +200,11 @@ def create_agent(player_config: dict, env_name: str, device) -> helpers.BaseAgen
         model_keeper.eval()
         model_keeper.to(device)
         return SelfLearningAgent(model_keeper.models['self_learner'].__class__.__name__, model_keeper=model_keeper, device=device)
+    elif kind == 'v_player':
+        model_keeper = create_model_keeper(player_config['model'], env_name)
+        model_keeper.eval()
+        model_keeper.to(device)
+        return VModelAgent(model_keeper.models['value'].__class__.__name__, model_keeper=model_keeper, device=device)        
     elif kind == 'q_player_tree_search':
         model_keeper = create_model_keeper(player_config['model'], env_name)
         model_keeper.eval()

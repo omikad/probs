@@ -75,7 +75,7 @@ def cmd_interactive_play(config: dict, device):
             elif inp == 'aa':
                 inputs = env.get_rotated_encoded_state()
                 vs = enemy.value_model.forward(*[torch.unsqueeze(torch.as_tensor(inp), dim=0) for inp in inputs]).detach().cpu().numpy()[0, 0]
-                qa = probs_impl_common.get_q_a_single_state(enemy.value_model, enemy.self_learning_model, env, 'cpu')
+                qa = probs_impl_common.get_q_a_single_state(enemy.self_learning_model, env, 'cpu')
                 print(f"Value(state) = {vs}")
                 print(f"Q(state, *) = {qa}")
                 for action in env.get_valid_actions_iter():

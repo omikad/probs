@@ -5,7 +5,7 @@ env:
   n_max_episode_steps: 200
 evaluate:
   evaluate_n_games: 100
-  randomize_n_turns: 2    # Number of first turns to play randomly (helps to evaluate deterministic players)
+  randomize_n_turns: 2
   enemy:
     kind: two_step_lookahead
 infra:
@@ -28,6 +28,7 @@ train:
   get_q_dataset_batch_size: 256
   max_depth: 100
   alphazero_move_num_sampling_moves: 20
+  q_add_hardest_nodes_per_step: 10
 model:
   value:
     class: ValueModel66_v11

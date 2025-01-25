@@ -54,7 +54,14 @@ class TreeNode:
                 queue.append(kid)
             qi += 1
         return queue
-
+    
+    def compute_action_values_from_kids(self):
+        assert len(self.action_and_kids) > 0
+        action_values = np.zeros(N_ACTIONS, dtype=np.float32)
+        for action, kid in self.action_and_kids:
+            rew_mul = -1 if (self.env.is_white_to_move() != kid.env.is_white_to_move()) else 1
+            action_values[action] = rew_mul * kid.state_value
+        return action_values
 
 def init_beam_search(env: helpers.BaseEnv, prev_tree: TreeNode, prev_action: int):
     MIN_INF = -1e5
@@ -224,12 +231,34 @@ def evaluate_tree_data(tree: TreeNode):
             node.state_value = computed_vs
         assert node.state_value is not None
 
-    action_values = np.zeros(N_ACTIONS, dtype=np.float32)
-    for action, kid in tree.action_and_kids:
-        rew_mul = -1 if (tree.env.is_white_to_move() != kid.env.is_white_to_move()) else 1
-        action_values[action] = rew_mul * kid.state_value
+    root_action_values = tree.compute_action_values_from_kids()
+    dataset_rows = []
+    for dataset_row in tree.env.get_rotated_encoded_states_with_symmetry__q_value_model(root_action_values):
+        if CONFIG['train']['dataset_drop_ratio'] > 1e-5 and np.random.rand() < CONFIG['train']['dataset_drop_ratio']:
+            continue
+        dataset_rows.append(dataset_row)
 
-    return action_values
+    if CONFIG['train']['q_add_hardest_nodes_per_step'] > 0:
+        hardest_nodes = []
+        for node in tree_bfs[1:]:
+            if node.action_values is not None:
+                assert node.action_and_kids is not None
+                computed_action_values = node.compute_action_values_from_kids()
+                assert len(computed_action_values) == len(node.action_values)
+
+                dist = np.sum(np.abs(computed_action_values - node.action_values))
+                hardest_nodes.append((-dist, len(hardest_nodes), node))
+
+        hardest_nodes.sort()
+        hardest_nodes = hardest_nodes[:CONFIG['train']['q_add_hardest_nodes_per_step']]
+        for _, __, node in hardest_nodes:
+            node_action_values = node.compute_action_values_from_kids()
+            for dataset_row in node.env.get_rotated_encoded_states_with_symmetry__q_value_model(node_action_values):
+                if CONFIG['train']['dataset_drop_ratio'] > 1e-5 and np.random.rand() < CONFIG['train']['dataset_drop_ratio']:
+                    continue
+                dataset_rows.append(dataset_row)
+
+    return root_action_values, dataset_rows
 
 
 def get_self_learning_model_dataset_rows__using_batch_eval(out_episode_rows: list, out_stats: Counter):
@@ -248,14 +277,11 @@ def get_self_learning_model_dataset_rows__using_batch_eval(out_episode_rows: lis
 
         tree = tree_container[0]
 
-        action_values = evaluate_tree_data(tree)
+        action_values, dataset_rows = evaluate_tree_data(tree)
 
         action, greedy_action = probs_impl_common.sample_action(env, CONFIG, action_values, action_mask, is_v_not_q=False)
 
-        for dataset_row in env.get_rotated_encoded_states_with_symmetry__q_value_model(action_values):
-            if CONFIG['train']['dataset_drop_ratio'] > 1e-5 and np.random.rand() < CONFIG['train']['dataset_drop_ratio']:
-                continue
-            out_episode_rows.append(dataset_row)
+        out_episode_rows.extend(dataset_rows)
 
         if action == greedy_action:
             out_stats['greedy_action_sum'] += 1
@@ -293,7 +319,7 @@ def get_dataset_batches_using_batched_eval(n_games: int):
 
         else:
             inputs_collection = [ to_eval_qa[0] for it, to_eval_qa in tasks_deque ]
-            action_values_batch = probs_impl_common.get_q_a_multi_inputs(VALUE_MODEL, SELF_LEARNING_MODEL, inputs_collection, GET_DATASET_DEVICE)
+            action_values_batch = probs_impl_common.get_q_a_multi_inputs(SELF_LEARNING_MODEL, inputs_collection, GET_DATASET_DEVICE)
 
             new_tasks_deque = deque()
 

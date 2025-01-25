@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import time
 import multiprocessing
-from collections import Counter, deque
+from collections import Counter
 
 import environments
 import helpers
@@ -64,7 +64,7 @@ def self_play__iterative(env: helpers.BaseEnv, replay_episode: helpers.Experienc
 def play_using_self_learned_model(game_ids):
     create_env_func = environments.get_create_env_func(CONFIG['env']['name'])
 
-    tasks_deque = deque()  # [(iterator, to_eval_env)]
+    tasks_list = []  # [(iterator, to_eval_env)]
     # iterator is self_play__iterative
     # to_eval_env = [env] - need to add evaluated actions as second element
 
@@ -72,9 +72,9 @@ def play_using_self_learned_model(game_ids):
     stats = Counter()
 
     next_game_i = 0
-    while next_game_i < len(game_ids) or len(tasks_deque) > 0:
+    while next_game_i < len(game_ids) or len(tasks_list) > 0:
 
-        if next_game_i < len(game_ids) and len(tasks_deque) < CONFIG['train']['self_learning_batch_size']:
+        if next_game_i < len(game_ids) and len(tasks_list) < CONFIG['train']['self_learning_batch_size']:
             env = create_env_func()
             replay_episode = helpers.ExperienceReplayEpisode()
             replay_episodes.append(replay_episode)
@@ -84,22 +84,22 @@ def play_using_self_learned_model(game_ids):
             to_eval_q_a = next(it)
 
             if to_eval_q_a is not None:
-                tasks_deque.append((it, to_eval_q_a))
+                tasks_list.append((it, to_eval_q_a))
 
         else:
-            inputs_collection = [ to_eval_env[0] for it, to_eval_env in tasks_deque ]
-            action_values_batch = probs_impl_common.get_q_a_multi_inputs(VALUE_MODEL, SELF_LEARNING_MODEL, inputs_collection, GET_DATASET_DEVICE)
+            inputs_collection = [ to_eval_env[0] for it, to_eval_env in tasks_list ]
+            action_values_batch = probs_impl_common.get_q_a_multi_inputs(SELF_LEARNING_MODEL, inputs_collection, GET_DATASET_DEVICE)
 
-            new_tasks_deque = deque()
+            new_tasks_list = []
 
-            for (it, to_eval_q_a), action_values in zip(tasks_deque, action_values_batch):
+            for (it, to_eval_q_a), action_values in zip(tasks_list, action_values_batch):
                 to_eval_q_a.append(action_values)
 
                 to_eval_q_a = next(it)
                 if to_eval_q_a is not None:
-                    new_tasks_deque.append((it, to_eval_q_a))
+                    new_tasks_list.append((it, to_eval_q_a))
 
-            tasks_deque = new_tasks_deque
+            tasks_list = new_tasks_list
 
     return replay_episodes, stats
 

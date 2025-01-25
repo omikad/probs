@@ -110,7 +110,7 @@ with logging:
 
 `time python -u go_probs.py configs/train_connect_four.yaml 2>&1 | tee __train.log`
 
-takes ~ 4 hours and shows the following learning curve (wins against `two_step_lookahead`):
+takes ~ 45 minutes and shows the following learning curve (wins against `two_step_lookahead`):
 
 ![Connect four training 100 iters](connect_four_training.png)
 
@@ -181,7 +181,7 @@ avoid immediate losing moves, or otherwise select randomly from the remaining mo
 
 * q_player - use model with V and Q models
 
-### Other configuration parameters
+### Configuration parameters
 
 * `env.name: mychess6x6` - environment name
 
@@ -220,6 +220,8 @@ avoid immediate losing moves, or otherwise select randomly from the remaining mo
 * `train.max_depth 100` - max sub-game tree depth in beam search
 
 * `train.alphazero_move_num_sampling_moves: 20` - number of first moves to sample actions, remaning moves will be selected greedily
+
+* `train.q_add_hardest_nodes_per_step: 10` - add this number of hardest nodes to Q dataset per step
 
 * `evaluate.evaluate_n_games: 100` - play this number of games to evaluate trained model
 
