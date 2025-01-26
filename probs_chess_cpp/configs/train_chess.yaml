@@ -14,15 +14,19 @@ training:
   n_high_level_iterations: 100000000
   q_train_sub_iterations: 1
   # v_train_episodes: 50
-  v_train_episodes: 5000
+  v_train_episodes: 10000
   # q_train_episodes: 10
-  q_train_episodes: 1000
-  dataset_drop_ratio: 0.75
+  q_train_episodes: 3000
   tree_num_q_s_a_calls: 50
   tree_max_depth: 10000
   # exploration_full_random: 1      # pick random moves during V training (for debugging)
   exploration_num_first_moves: 30
-  q_add_hardest_nodes_per_step: 10  # applies before dataset_drop_ratio
+
+  # Q Dataset rows priority: first check `q_skip_turn_prob`, then add rows to dataset, then remove `dataset_drop_ratio` rows
+  q_skip_turn_prob: 0.7
+  q_add_hardest_nodes_per_turn: 5  # applies before dataset_drop_ratio
+  dataset_drop_ratio: 0.7
+
   q_self_play_batch_size: 256
   batch_size: 256
   learning_rate: 0.0003
@@ -30,24 +34,24 @@ training:
   checkpoints_dir: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints'
 
   # resume from checkpoint:
-  # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241231-111234*'
+  checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
 
   is_test: 0    # apply various checks on each iteration
 evaluate:
   randomize_n_turns: 2
   enemy:
-    kind: "one_step_lookahead"
-    # kind: "q_resnet_player"
-    # model:
-    #   v:
-    #     type: resnet
-    #     res_blocks: 11
-    #     filters: 96
-    #   q:
-    #     type: resnet
-    #     res_blocks: 11
-    #     filters: 96
-    #   checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
+    # kind: "one_step_lookahead"
+    kind: "q_resnet_player"
+    model:
+      v:
+        type: resnet
+        res_blocks: 11
+        filters: 96
+      q:
+        type: resnet
+        res_blocks: 11
+        filters: 96
+      checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
 infra:
   gpu: 0                               # gpu id, use -1 for cpu
   n_threads: 5
