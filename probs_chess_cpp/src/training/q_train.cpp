@@ -431,15 +431,16 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
 
                     if (envs[ei]->top_node_full_expand) {
                         vector<int> dataset_nodes;
-                        if (q_add_hardest_nodes_per_turn == 0) {
+                        if (rand() % 1000000 > dataset_drop_ratio * 1000000)
+                            dataset_nodes.push_back(prev_top_node);
+
+                        int curr_add_hardest_nodes = 0;
+                        for (int i = 0; i < q_add_hardest_nodes_per_turn; i++)
                             if (rand() % 1000000 > dataset_drop_ratio * 1000000)
-                                dataset_nodes.push_back(prev_top_node);
-                        }
-                        else {
-                            for (int node : envs[ei]->GetHardestNodes(prev_top_node, q_add_hardest_nodes_per_turn))
-                                if (rand() % 1000000 > dataset_drop_ratio * 1000000)
-                                    dataset_nodes.push_back(node);
-                        }
+                                curr_add_hardest_nodes++;
+                        if (curr_add_hardest_nodes > 0)
+                            for (int node : envs[ei]->GetHardestNodes(prev_top_node, curr_add_hardest_nodes))
+                                dataset_nodes.push_back(node);
 
                         for (int node : dataset_nodes) {
                             QTrainNode* qnode = envs[ei]->nodes[node];

@@ -16,15 +16,15 @@ training:
   # v_train_episodes: 50
   v_train_episodes: 10000
   # q_train_episodes: 10
-  q_train_episodes: 3000
+  q_train_episodes: 1000
   tree_num_q_s_a_calls: 50
   tree_max_depth: 10000
   # exploration_full_random: 1      # pick random moves during V training (for debugging)
   exploration_num_first_moves: 30
 
   # Q Dataset rows priority: first check `q_skip_turn_prob`, then add rows to dataset, then remove `dataset_drop_ratio` rows
-  q_skip_turn_prob: 0.7
-  q_add_hardest_nodes_per_turn: 5  # applies before dataset_drop_ratio
+  q_skip_turn_prob: 0.0
+  q_add_hardest_nodes_per_turn: 0  # applies before dataset_drop_ratio
   dataset_drop_ratio: 0.7
 
   q_self_play_batch_size: 256

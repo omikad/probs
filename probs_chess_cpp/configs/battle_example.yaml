@@ -14,9 +14,8 @@ player1:
       type: resnet
       res_blocks: 11
       filters: 96
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250103-114533*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250121-141439*'
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250124-095102*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250128-191336*'
 
 player2:
   # kind: "random"
@@ -33,21 +32,20 @@ player2:
       type: resnet
       res_blocks: 11
       filters: 96
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241219-103526*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241224-104436*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20241228-123713*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250101-134134*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250103-114533*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250106-100812*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250108-163826*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250109-221743*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250112-063901*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250115-013705*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250117-221507*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250121-141439*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250124-095102*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250124-085503*'
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250125-091218*'
+    checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20241219-103526*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20241224-104436*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20241228-123713*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250101-134134*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250103-114533*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250106-100812*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250108-163826*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250109-221743*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250112-063901*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250115-013705*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250117-221507*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250121-141439*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
+    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250128-191336*'
 
 battle:
   random_first_turns: 2
