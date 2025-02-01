@@ -227,9 +227,11 @@ struct EnvExpandState {
             for (int kid : qnode->kids)
                 self(self, kid);
 
-            heap.insert({qnode->sum_q_estimation_delta, node});
-            if ((int)heap.size() > q_add_hardest_nodes_per_turn)
-                heap.erase(heap.begin());
+            if (node != start_node) {
+                heap.insert({qnode->sum_q_estimation_delta, node});
+                if ((int)heap.size() > q_add_hardest_nodes_per_turn)
+                    heap.erase(heap.begin());
+            }
         };
         dfs(dfs, start_node);
 
@@ -376,6 +378,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
     int q_add_hardest_nodes_per_turn = config_parser.GetInt("training.q_add_hardest_nodes_per_turn", false, 0);
     bool is_test = config_parser.GetInt("training.is_test", false, 0) > 0;
     double q_skip_turn_prob = config_parser.GetDouble("training.q_skip_turn_prob", false, 0);
+    double q_hardest_nodes_weight = config_parser.GetDouble("training.q_hardest_nodes_weight", false, 1.0);
 
     int game_idx = 0;
     map<string, vector<long long>> stats;
@@ -430,9 +433,9 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                     assert(envs[ei]->tree.GetGameResult(prev_top_node) == lczero::GameResult::UNDECIDED);
 
                     if (envs[ei]->top_node_full_expand) {
-                        vector<int> dataset_nodes;
+                        vector<pair<int, double>> dataset_nodes;
                         if (rand() % 1000000 > dataset_drop_ratio * 1000000)
-                            dataset_nodes.push_back(prev_top_node);
+                            dataset_nodes.push_back({prev_top_node, 1.0});
 
                         int curr_add_hardest_nodes = 0;
                         for (int i = 0; i < q_add_hardest_nodes_per_turn; i++)
@@ -440,9 +443,9 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                                 curr_add_hardest_nodes++;
                         if (curr_add_hardest_nodes > 0)
                             for (int node : envs[ei]->GetHardestNodes(prev_top_node, curr_add_hardest_nodes))
-                                dataset_nodes.push_back(node);
+                                dataset_nodes.push_back({node, q_hardest_nodes_weight});
 
-                        for (int node : dataset_nodes) {
+                        for (auto [node, node_weight] : dataset_nodes) {
                             QTrainNode* qnode = envs[ei]->nodes[node];
 
                             tree_rows[ei].push_back({ rows.size(), node });
@@ -451,6 +454,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
                             rows.back().input_planes = qnode->input_planes;
                             rows.back().transform = qnode->transform;
                             rows.back().target = qnode->moves_estimation;
+                            rows.back().row_weight = node_weight;
                         }                        
                     }
 
@@ -541,6 +545,9 @@ void TrainQ(const ConfigParser& config_parser, ofstream& losses_file, ResNet q_m
         torch::Tensor target_mask = torch::zeros({batch_size, lczero::kNumOutputPolicyFilters, 8, 8});
         auto target_mask_accessor = target_mask.accessor<float, 4>();
 
+        torch::Tensor weights = torch::zeros(batch_size);
+        auto weights_accessor = weights.accessor<float, 1>();
+
         int actions_mask_norm = 0;
 
         for (int ri = end - batch_size; ri < end; ri++) {
@@ -559,16 +566,20 @@ void TrainQ(const ConfigParser& config_parser, ofstream& losses_file, ResNet q_m
                 actions_mask_norm++;
             }
 
+            weights_accessor[bi] = q_dataset[row_i].row_weight;
+
             FillInputTensor(input_accessor, bi, q_dataset[row_i].input_planes);
         }
 
         // cout << "Input: " << DebugString(input) << endl;
         // cout << "TargetVals: " << DebugString(target_vals) << endl;
         // cout << "TargetMask: " << DebugString(target_mask) << endl;
+        // cout << "Weights: " << DebugString(weights) << endl;
 
         input = input.to(device);
         target_vals = target_vals.to(device);
         target_mask = target_mask.to(device);
+        weights = weights.to(device);
 
         q_optimizer.zero_grad();
 
@@ -576,11 +587,11 @@ void TrainQ(const ConfigParser& config_parser, ofstream& losses_file, ResNet q_m
         // cout << "Prediction: " << DebugString(q_prediction.to(torch::kCPU)) << endl;
 
         torch::Tensor loss = torch::mse_loss(q_prediction, target_vals, at::Reduction::None);
-        // cout << "Loss: " << DebugString(loss) << endl;
+        // cout << "loss: " << DebugString(loss) << endl;
 
-        loss = torch::sum(loss * target_mask) / actions_mask_norm;
-
-        // cout << "Loss: " << DebugString(loss) << endl;
+        loss = torch::sum(loss * target_mask, {1,2,3});
+        loss = torch::sum(loss * weights) / actions_mask_norm;
+        // cout << "loss: " << DebugString(loss) << endl;
 
         loss.backward();
 

@@ -8,20 +8,14 @@ player1:
   model:
     v:
       type: resnet
-      res_blocks: 11
-      filters: 96
+      res_blocks: 17
+      filters: 128
     q:
       type: resnet
-      res_blocks: 11
-      filters: 96
-    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
-    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250128-191336*'
-
+      res_blocks: 13
+      filters: 128
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250201-122725*'
 player2:
-  # kind: "random"
-  # kind: "one_step_lookahead"
-  # kind: "two_step_lookahead"
-  # kind: "v_resnet_player"
   kind: "q_resnet_player"
   model:
     v:
@@ -45,7 +39,6 @@ player2:
     # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250117-221507*'
     # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250121-141439*'
     # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
-    # checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250128-191336*'
 
 battle:
   random_first_turns: 2

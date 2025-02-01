@@ -93,6 +93,7 @@ VResnetPlayer::VResnetPlayer(ResNet v_model, at::Device& device, const std::stri
         v_model(v_model),
         device(device),
         name(name) {
+    cout << "VResnetPlayer V model: ";
     cout << DebugString(*v_model) << endl;
 }
 
@@ -146,6 +147,7 @@ vector<lczero::Move> VResnetPlayer::GetActions(vector<PositionHistoryTree*>& his
 
 
 QResnetPlayer::QResnetPlayer(ResNet q_model, at::Device& device, const std::string& name) : name(name), q_model(q_model), device(device) {
+    cout << "QResnetPlayer Q model: ";
     cout << DebugString(*q_model) << endl;
 }
 

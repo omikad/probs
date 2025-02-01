@@ -69,6 +69,11 @@ ModelKeeper::ModelKeeper(const ConfigParser& config_parser, const string& config
         }
     }
 
+    cout << "ModelKeeper V model: ";
+    cout << DebugString(*v_model);
+    cout << "ModelKeeper Q model: ";
+    cout << DebugString(*q_model);
+
     cout << "[MODEL_KEEPER] Models V and Q created from scratch" << endl;
 }
 

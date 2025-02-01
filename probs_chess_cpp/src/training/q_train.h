@@ -24,6 +24,7 @@ struct QDatasetRow {
     lczero::InputPlanes input_planes;
     int transform;
     std::vector<MoveEstimation> target;
+    double row_weight;
 };
 
 using QDataset = std::vector<QDatasetRow>;

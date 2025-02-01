@@ -4,18 +4,19 @@ env:
 model:
   v:
     type: resnet
-    res_blocks: 11
-    filters: 96
+    res_blocks: 17
+    filters: 128
   q:
     type: resnet
-    res_blocks: 11
-    filters: 96
+    res_blocks: 13
+    filters: 128
 training:
+  n_high_level_iterations: 1
   n_high_level_iterations: 100000000
-  q_train_sub_iterations: 1
+  # q_train_sub_iterations: 1
   # v_train_episodes: 50
   v_train_episodes: 10000
-  # q_train_episodes: 10
+  # q_train_episodes: 50
   q_train_episodes: 1000
   tree_num_q_s_a_calls: 50
   tree_max_depth: 10000
@@ -23,9 +24,10 @@ training:
   exploration_num_first_moves: 30
 
   # Q Dataset rows priority: first check `q_skip_turn_prob`, then add rows to dataset, then remove `dataset_drop_ratio` rows
-  q_skip_turn_prob: 0.0
-  q_add_hardest_nodes_per_turn: 0  # applies before dataset_drop_ratio
-  dataset_drop_ratio: 0.7
+  q_skip_turn_prob: 0.93
+  q_add_hardest_nodes_per_turn: 4  # applies before dataset_drop_ratio
+  q_hardest_nodes_weight: 0.1
+  dataset_drop_ratio: 0.0
 
   q_self_play_batch_size: 256
   batch_size: 256
@@ -34,26 +36,27 @@ training:
   checkpoints_dir: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints'
 
   # resume from checkpoint:
-  checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
+  # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
 
   is_test: 0    # apply various checks on each iteration
 evaluate:
   randomize_n_turns: 2
   enemy:
-    # kind: "one_step_lookahead"
-    kind: "q_resnet_player"
-    model:
-      v:
-        type: resnet
-        res_blocks: 11
-        filters: 96
-      q:
-        type: resnet
-        res_blocks: 11
-        filters: 96
-      checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
+    kind: "one_step_lookahead"
+    # kind: "q_resnet_player"
+    # model:
+    #   v:
+    #     type: resnet
+    #     res_blocks: 11
+    #     filters: 96
+    #   q:
+    #     type: resnet
+    #     res_blocks: 11
+    #     filters: 96
+    #   checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
 infra:
   gpu: 0                               # gpu id, use -1 for cpu
+  # gpu: -1
   n_threads: 5
   evaluate_n_games: 500
   losses_log_dir: '/home/excellent/ds/probs/probs_chess_cpp/logs'
