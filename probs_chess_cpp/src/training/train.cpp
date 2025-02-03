@@ -124,6 +124,7 @@ void ProbsImpl::GetQDatasetAndTrain(UsageCounter& usage, ofstream& losses_file, 
 void ProbsImpl::GoTrain() {
     torch::set_num_threads(1);
 
+    bool is_test = config_parser.GetInt("training.is_test", false, 0) > 0;
     int batch_size = config_parser.GetInt("training.batch_size", true, 0);
     double dataset_drop_ratio = config_parser.GetDouble("training.dataset_drop_ratio", false, 0);
     bool exploration_full_random = config_parser.GetInt("training.exploration_full_random", false, 0) > 0;
@@ -137,8 +138,13 @@ void ProbsImpl::GoTrain() {
     int tree_max_depth = config_parser.GetInt("training.tree_max_depth", true, 0);
     int evaluate_n_games = config_parser.GetInt("infra.evaluate_n_games", true, 0);
     int randomize_n_turns = config_parser.GetInt("evaluate.randomize_n_turns", true, 0);
+    int q_add_hardest_nodes_per_turn = config_parser.GetInt("training.q_add_hardest_nodes_per_turn", false, 0);
+    double q_skip_turn_prob = config_parser.GetDouble("training.q_skip_turn_prob", false, 0);
+    double q_hardest_nodes_weight = config_parser.GetDouble("training.q_hardest_nodes_weight", false, 1.0);
+    int q_skip_turn_nqsa_calls = config_parser.GetInt("training.q_skip_turn_nqsa_calls", false, 1);
 
     cout << "[TRAIN] Start training:" << endl;
+    cout << "  is_test = " << (is_test ? "true" : "false") << endl;
     cout << "  batch_size = " << batch_size << endl;
     cout << "  exploration_full_random = " << (exploration_full_random ? "true" : "false") << endl;
     cout << "  exploration_num_first_moves = " << exploration_num_first_moves << endl;
@@ -150,6 +156,11 @@ void ProbsImpl::GoTrain() {
     cout << "  tree_num_q_s_a_calls = " << tree_num_q_s_a_calls << endl;
     cout << "  tree_max_depth = " << tree_max_depth << endl;
     cout << "  randomize_n_turns = " << randomize_n_turns << endl;
+    cout << "  dataset_drop_ratio = " << dataset_drop_ratio << endl;
+    cout << "  q_add_hardest_nodes_per_turn = " << q_add_hardest_nodes_per_turn << endl;
+    cout << "  q_skip_turn_prob = " << q_skip_turn_prob << endl;
+    cout << "  q_hardest_nodes_weight = " << q_hardest_nodes_weight << endl;
+    cout << "  q_skip_turn_nqsa_calls = " << q_skip_turn_nqsa_calls << endl;
 
     std::time_t t =  std::time(NULL);
     std::tm tm    = *std::localtime(&t);

@@ -379,6 +379,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
     bool is_test = config_parser.GetInt("training.is_test", false, 0) > 0;
     double q_skip_turn_prob = config_parser.GetDouble("training.q_skip_turn_prob", false, 0);
     double q_hardest_nodes_weight = config_parser.GetDouble("training.q_hardest_nodes_weight", false, 1.0);
+    int q_skip_turn_nqsa_calls = config_parser.GetInt("training.q_skip_turn_nqsa_calls", false, 1);
 
     int game_idx = 0;
     map<string, vector<long long>> stats;
@@ -422,7 +423,7 @@ QDataset GetQDataset(ResNet v_model, ResNet q_model, at::Device& device, const C
             for (int ei = envs.size() - 1; ei >= 0; ei--) {
                 envs[ei]->n_qsa_calls++;
                 
-                int curr_limit_nqsa = envs[ei]->top_node_full_expand ? tree_num_q_s_a_calls : 1;
+                int curr_limit_nqsa = envs[ei]->top_node_full_expand ? tree_num_q_s_a_calls : q_skip_turn_nqsa_calls;
                 if (envs[ei]->beam.size() > 0 && envs[ei]->n_qsa_calls < curr_limit_nqsa)
                     continue;
 

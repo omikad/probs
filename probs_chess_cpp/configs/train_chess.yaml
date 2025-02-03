@@ -24,10 +24,11 @@ training:
   exploration_num_first_moves: 30
 
   # Q Dataset rows priority: first check `q_skip_turn_prob`, then add rows to dataset, then remove `dataset_drop_ratio` rows
-  q_skip_turn_prob: 0.93
-  q_add_hardest_nodes_per_turn: 4  # applies before dataset_drop_ratio
+  q_skip_turn_prob: 0.0
+  q_skip_turn_nqsa_calls: 10   # low values make model oscillate
+  q_add_hardest_nodes_per_turn: 0  # applies before dataset_drop_ratio
   q_hardest_nodes_weight: 0.1
-  dataset_drop_ratio: 0.0
+  dataset_drop_ratio: 0.7
 
   q_self_play_batch_size: 256
   batch_size: 256
